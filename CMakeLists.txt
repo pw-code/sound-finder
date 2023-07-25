@@ -28,3 +28,15 @@ pico_add_extra_outputs(sound-finder)
 # printf to usb/serial/both? (1=on, 0=off)
 pico_enable_stdio_usb(sound-finder 1)
 pico_enable_stdio_uart(sound-finder 0)
+
+# support upload and monitoring from "make upload" and "make monitor"
+add_custom_target(upload 
+    COMMAND picotool load -u sound-finder.bin -f
+    DEPENDS sound-finder
+)
+
+set(tty_port "/dev/ttyACM0")
+add_custom_target(monitor 
+    COMMAND bash -c "echo waiting for ${tty_port}; while [ ! -r ${tty_port} ]; do sleep 1; done; minicom -o -D ${tty_port}"
+    VERBATIM
+)
