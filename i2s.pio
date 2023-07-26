@@ -1,0 +1,83 @@
+;
+; Implements 6 I2S inputs using PIO across 3 data lines and shared clock and WS
+;
+; INMP441 MEMS microphone, 24bits.
+; Aim for WS freq 44kHZ (max is 50kHz)
+;         SCK freq 2116.8kHz, 2.1MHz (44kHz * 24bits * 2 channels) (max is 3.2MHz)
+;
+; We are receiving 6x 24bits of data (but in alternate 3x 24bit channels)
+; So output data as 3x 8 bit blocks, with the high byte encoding the packet type.
+; Type contains left/right channel marker (C) (0 left, 1 right), byte count (B) (0..2 to indicate which of the 24 bits this byte is)
+; The remaining 3 bytes are 8bits each from each channel (0,1,2), interleaved as we read them. CPU will have to unpack these.
+;   MSG                             LSB
+;   xxxxxCBB 01201201 20120120 12012012
+
+.program i2s
+
+.side_set 1 opt                 ; side commands write 1 pin (clock)
+
+public entry_point:
+    ;start at left channel (ws=0)
+    set pins 0        side 0    ; ws=0, clk=0  (pins writes WS only, side write clock only)
+
+.wrap_target
+
+sample_24_bits:
+    set x, 2                    ; which byte of the 24bits
+read_8_bits:
+    in  pins, 4                 ; channel marker 'C' (we read data0,1,2 and WS, but shifting will move data0,1,2 into xxxxx ignored of the first byte)
+    in  x, 2                    ; byte marker 'B'
+    set y, 8          side 1    ; start 8 bits, clock high
+read_bit:
+    in  pins, 3       side 0    ; sample 3 pins, then clock low
+    jmp y-- read_bit  side 1    ; 
+
+    push                        ; send this packet now, don't block, too bad if CPU skips a packet
+
+    jmp x-- read_8_bits         ; keep going while we are reading 8 byte blocks of the 24 bits per channel
+
+
+swap_channels:
+    mov x, ! pins               ; read  data0,1,2 and WS and invert them (we just need to invert WS)
+    mov pins, x                 ; mov/out only writes WS (lsb of x == WS, which we just inverted)
+
+.wrap
+
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+static inline void i2s_program_init(PIO pio, uint sm, uint offset, uint pin_clk, uint pin_ws, uint pin_data0, uint pin_data1, uint pin_data2) {
+
+    //Inputs must be consecutive pins
+    assert(pin_data1 == pin_data0 + 1);
+    assert(pin_data2 == pin_data0 + 2);
+    assert(pin_ws    == pin_data0 + 3); //last pin in block
+
+    pio_sm_config c = i2s_program_get_default_config(offset);
+
+    // IO mapping
+    sm_config_set_out_pins(&c, pin_ws, 1);   // OUT writes WS
+    sm_config_set_set_pins(&c, pin_ws, 1);   // SET writes WS
+    sm_config_set_in_pins(&c, pin_data0);    // IN reads data0,data1,data2,ws
+    sm_config_set_sideset_pins(&c, pin_clk); // sideset writes CLK
+
+    // we only read, in bits, not bytes/words
+    sm_config_set_in_shift(&c,
+            false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
+            false,  // autopush: false
+            0);     // bits: n/a, not auto
+
+    // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    //2.1MHz clock (TODO: needs to be faster because we have multiple PIO instructions per I2S SLK ?)
+    float div = (float)clock_get_hz(clk_sys) / (2.116 * 1000000);
+    sm_config_set_clkdiv(&c, div);
+
+    // Configure and start SM
+    pio_sm_init(pio, sm, offset + i2s_offset_entry_point, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}

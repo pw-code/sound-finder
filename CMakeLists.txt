@@ -15,8 +15,13 @@ add_executable(sound-finder
     main.c
 )
 
+pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)
+
 # Add pico_stdlib library which aggregates commonly used features
-target_link_libraries(sound-finder pico_stdlib)
+target_link_libraries(sound-finder 
+    pico_stdlib
+    hardware_pio
+    )
 
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(sound-finder)
