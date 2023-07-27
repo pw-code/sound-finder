@@ -18,6 +18,12 @@ const int I2S_DATA1_PIN = 7;
 const int I2S_DATA2_PIN = 8;
 const int I2S_WS_PIN    = 9;
 
+const int TEST_PIN      = 16;
+
+
+const int AUDIO_SAMPLE_RATE_HZ = 48000; //48kHz (PIO clock divider ends up at 44.2khz, close enough)
+
+
 int main() {
     bi_decl(bi_program_description("sound-finder waveforming sound locating tool for 6 I2S microphones"));
     bi_decl(bi_1pin_with_name(LED_PIN, "On-board LED"));
@@ -31,21 +37,25 @@ int main() {
 
     // PIO setup for i2s
     PIO pio = pio0;
-    uint offset = pio_add_program(pio, &i2s_program);
-    uint sm = pio_claim_unused_sm(pio, true);
-    i2s_program_init(pio, sm, offset, I2S_CLK_PIN, I2S_WS_PIN, I2S_DATA0_PIN, I2S_DATA1_PIN, I2S_DATA2_PIN);
+    i2s_program_load(pio, AUDIO_SAMPLE_RATE_HZ, I2S_CLK_PIN, I2S_WS_PIN, I2S_DATA0_PIN, I2S_DATA1_PIN, I2S_DATA2_PIN);
 
     // LED flashing
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
+    gpio_init(TEST_PIN);
+    gpio_set_dir(TEST_PIN, GPIO_OUT);
+
     for (int i=0; ;++i) {
         gpio_put(LED_PIN, 1);
+        gpio_put(TEST_PIN, 1);
         printf("Hello, world! %d\n", i);
         sleep_ms(50);
 
         gpio_put(LED_PIN, 0);
-        sleep_ms(2000);
+        sleep_ms(1000);
+        gpio_put(TEST_PIN, 0);
+        sleep_ms(1000);
     }
     
     return 0;
