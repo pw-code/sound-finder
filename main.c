@@ -36,12 +36,16 @@ uint32_t capture_buf_data0[AUDIO_CHANNEL_BUF_SIZE];
 uint32_t capture_buf_data1[AUDIO_CHANNEL_BUF_SIZE];
 uint32_t capture_buf_data2[AUDIO_CHANNEL_BUF_SIZE];
 
+extern void analyse_last_capture(uint capture_length, uint32_t* capture_buf_data0, uint32_t* capture_buf_data1, uint32_t* capture_buf_data2);
+
 uint handler_dma_channel, dma_chan0, dma_chan1, dma_chan2;
 
 volatile uint32_t capture_count = 0;
+volatile bool capture_ready = false;
 
 void i2s_dma_handler() {
     capture_count++;
+    capture_ready = true;
 
     // clear the interrupt
     dma_hw->ints0 = 1u << handler_dma_channel;
@@ -49,7 +53,7 @@ void i2s_dma_handler() {
     // All DMA channels should have finished at once (the PIO's are synchronised)
     // We we can and need to re-trigger all 3
 
-    // Give the channel a new wave table entry to read from, and re-trigger it
+    // Give the channel a new buffer pointer, and re-trigger it
     dma_channel_set_write_addr(dma_chan0, capture_buf_data0, true);
     dma_channel_set_write_addr(dma_chan1, capture_buf_data1, true);
     dma_channel_set_write_addr(dma_chan2, capture_buf_data2, true);
@@ -93,6 +97,8 @@ static void i2s_dma_setup(PIO pio) {
 }
 
 
+extern void core1_main(); //for core1 to run on 
+
 int main() {
     bi_decl(bi_program_description("sound-finder waveforming sound locating tool for 6 I2S microphones"));
     bi_decl(bi_1pin_with_name(LED_PIN, "On-board LED"));
@@ -115,6 +121,8 @@ int main() {
     // Start PIO (**at the same time** and in sync)
     pio_enable_sm_mask_in_sync(pio, 0x0f); //all 4 at once!!
 
+    //trigger analysis on the second core
+//    multicore_launch_core1(core1_main);
 
     // LED flashing
     gpio_init(LED_PIN);
@@ -127,6 +135,10 @@ int main() {
 
         gpio_put(LED_PIN, 0);
         sleep_ms(2000);
+
+        if (capture_ready) {
+            analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0, capture_buf_data1, capture_buf_data2);
+        }
     }
     
     return 0;

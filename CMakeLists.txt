@@ -13,6 +13,7 @@ pico_sdk_init()
 
 add_executable(sound-finder
     main.c
+    analyse.c
     offsets.h
     offsets.c
 )

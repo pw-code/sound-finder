@@ -23,27 +23,25 @@
 .program i2s_clocks
 .side_set 1
 
-    set y, 0            side 0       ; n/a. Just to match closk with i2s data prog
-
 .wrap_target
 
     //WS = 0
 left_word:
-    set x, 24           side 0       ;24 bits per word
+    set x, 31           side 0       ;32 clocks per word required by INMP441
 left_bits:
     set pins, 0         side 1       ;WS=0, CLK=1
     jmp x-- left_bits   side 0       ;CLK=0, jmp
 
-    set pins, 1         side 0  [2]  ;prepare for next word. delay to match data loops (in + mov)
+    set pins, 1         side 0       ;prepare for next word.
 
     //WS = 1
 right_word:
-    set x, 24           side 0       ;24 bits per word
+    set x, 31           side 0       ;32 clocks per word required by INMP441
 right_bits:
     set pins, 1         side 1       ;WS=1, CLK=1
     jmp x-- right_bits  side 0       ;CLK=0, jmp
 
-    set pins, 0         side 0  [2]  ;prepare for next word. delay to match data loops (in + mov)
+    set pins, 0         side 0       ;prepare for next word.
 
 .wrap
 
@@ -52,19 +50,22 @@ right_bits:
 ; -----------------
 .program i2s_data
 
-    set y, 0                ; WS substitute - to match i2s clocks prog
+    set y, 0                ; WS substitute - to match ws state in i2s clocks prog
+                            ; No matching instruction in clock prog.
+                            ; Because we want to sample just as clock falls, so we are 1 clock behind is2 clocks
 
 .wrap_target
 
-    set x, 24               ; 24 bits per word
+    set x, 30               ; 32 bits per word, but last handled differently
 read_bits:
     in  pins, 1
     jmp x-- read_bits
 
-    in y, 8                 ; last byte is now WS indicator (0x00 or 0xff)
-
+    ; bit 32 (in 2 instructions to match loop size)
+    in y, 1                 ; last bit is now WS indicator
     push                    ; non blocking (we must not get out of sync with clocks).
 
+    ; prepare for next work
     mov y, !y               ; flip Y (toggle channel)
 
 .wrap
