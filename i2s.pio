@@ -23,21 +23,27 @@
 .program i2s_clocks
 .side_set 1
 
+    set y, 0            side 0       ; n/a. Just to match closk with i2s data prog
+
 .wrap_target
 
+    //WS = 0
 left_word:
-    set x, 24           side 0    ;24 bits per word
+    set x, 24           side 0       ;24 bits per word
 left_bits:
-    set pins, 0         side 1    ;WS=0, CLK=1
-    jmp x-- left_bits   side 0    ;CLK=0, jmp
-    set pins, 1         side 0    ;prepare for next word. Also a spacer to match PUSH in the data loops
+    set pins, 0         side 1       ;WS=0, CLK=1
+    jmp x-- left_bits   side 0       ;CLK=0, jmp
 
+    set pins, 1         side 0  [2]  ;prepare for next word. delay to match data loops (in + mov)
+
+    //WS = 1
 right_word:
-    set x, 24           side 0    ;24 bits per word
+    set x, 24           side 0       ;24 bits per word
 right_bits:
-    set pins, 1         side 1    ;WS=1, CLK=1
-    jmp x-- right_bits  side 0    ;CLK=0, jmp
-    set pins, 0         side 0    ;prepare for next word. Also a spacer to match PUSH in the data loops
+    set pins, 1         side 1       ;WS=1, CLK=1
+    jmp x-- right_bits  side 0       ;CLK=0, jmp
+
+    set pins, 0         side 0  [2]  ;prepare for next word. delay to match data loops (in + mov)
 
 .wrap
 
@@ -46,13 +52,20 @@ right_bits:
 ; -----------------
 .program i2s_data
 
+    set y, 0                ; WS substitute - to match i2s clocks prog
+
 .wrap_target
 
     set x, 24               ; 24 bits per word
 read_bits:
     in  pins, 1
     jmp x-- read_bits
-    push                    ; non blocking (we must not get out of sync with clocks)
+
+    in y, 8                 ; last byte is now WS indicator (0x00 or 0xff)
+
+    push                    ; non blocking (we must not get out of sync with clocks).
+
+    mov y, !y               ; flip Y (toggle channel)
 
 .wrap
 
@@ -60,17 +73,18 @@ read_bits:
 % c-sdk {
 #include "hardware/clocks.h"
 
+// Which state machine for which function?
+const int sm_data0 = 0;
+const int sm_data1 = 1;
+const int sm_data2 = 2;
+const int sm_clocks = 3;
+
+
 static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, uint pin_ws, uint pin_data0, uint pin_data1, uint pin_data2) {
 
     //Inputs must be consecutive pins
     assert(pin_data1 == pin_data0 + 1);
     assert(pin_data2 == pin_data0 + 2);
-
-    //which state machine for which function
-    const int sm_data0 = 0;
-    const int sm_data1 = 1;
-    const int sm_data2 = 2;
-    const int sm_clocks = 3;
 
     //clock control program
     uint clocks_offset = pio_add_program(pio, &i2s_clocks_program);
@@ -122,7 +136,7 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
 
     //2.1MHz clock (TODO: needs to be faster because we have multiple PIO instructions per I2S SLK ?)
     const uint i2s_rate_hz = sample_rate_hz * 2 * 24; // 2 channels, 24bits each
-    const uint pio_cycles_per_i2s_clock = 2; //set+jmp (ignoring push overhead)
+    const float pio_cycles_per_i2s_clock = ((24*2) + 4) / 24.0; //overage the total instructions over the 24bits cycle (loop, set+in,in,push)
     const float div = (float)clock_get_hz(clk_sys) / (i2s_rate_hz * pio_cycles_per_i2s_clock);
     //all the same
     sm_config_set_clkdiv(&cfg_clocks, div);
@@ -135,8 +149,10 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     pio_sm_init(pio, 1, data_offset,   &cfg_data1 );
     pio_sm_init(pio, 2, data_offset,   &cfg_data2 );
     pio_sm_init(pio, 3, clocks_offset, &cfg_clocks);
+
     // set all enabled
-    pio_enable_sm_mask_in_sync(pio, 0x0f); //all 4 at once!!
+    //started in main() after DMA setup 
+    //pio_enable_sm_mask_in_sync(pio, 0x0f); //all 4 at once!!
 }
 
 %}

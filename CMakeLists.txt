@@ -21,6 +21,7 @@ pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)
 target_link_libraries(sound-finder 
     pico_stdlib
     hardware_pio
+    hardware_dma
     )
 
 # create map/bin/hex/uf2 file in addition to ELF.
