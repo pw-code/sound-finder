@@ -13,6 +13,8 @@ pico_sdk_init()
 
 add_executable(sound-finder
     main.c
+    offsets.h
+    offsets.c
 )
 
 pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)

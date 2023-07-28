@@ -3,6 +3,8 @@
 #include "pico/binary_info.h"
 #include "hardware/dma.h"
 
+#include "offsets.h"
+
 #include "i2s.pio.h"
 
 // GP25
@@ -21,6 +23,10 @@ const int I2S_WS_PIN    = 9;
 
 
 #define AUDIO_SAMPLE_RATE_HZ 30000     /* With nyquist limit this should give is up to 15khz sounds. Good enough with too much data. */
+
+#if AUDIO_SAMPLE_RATE_HZ != SAMPLE_OFFSET_HZ
+# error ("Mismatched sample rates " AUDIO_SAMPLE_RATE_NZ " != " SAMPLE_OFFSET_HZ)
+#endif
 
 // Audio buffers. These must fit in ram (only 260kb total)
 #define AUDIO_SAMPLE_MILLISECONDS 250   /* 250ms per capture */
