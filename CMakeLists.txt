@@ -13,6 +13,7 @@ pico_sdk_init()
 
 add_executable(sound-finder
     main.c
+    main1.c
     analyse.c
     offsets.h
     offsets.c
@@ -23,6 +24,7 @@ pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)
 # Add pico_stdlib library which aggregates commonly used features
 target_link_libraries(sound-finder 
     pico_stdlib
+    pico_multicore
     hardware_pio
     hardware_dma
     )

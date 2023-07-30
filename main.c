@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
+#include "pico/multicore.h"
 #include "hardware/dma.h"
 
 #include "offsets.h"
@@ -20,6 +21,8 @@ const int I2S_DATA0_PIN = 6;
 const int I2S_DATA1_PIN = 7;
 const int I2S_DATA2_PIN = 8;
 const int I2S_WS_PIN    = 9;
+
+const int TEST_PIN      = 11;
 
 
 #define AUDIO_SAMPLE_RATE_HZ 30000     /* With nyquist limit this should give is up to 15khz sounds. Good enough with too much data. */
@@ -41,7 +44,7 @@ extern void analyse_last_capture(uint capture_length, uint32_t* capture_buf_data
 uint handler_dma_channel, dma_chan0, dma_chan1, dma_chan2;
 
 volatile uint32_t capture_count = 0;
-volatile bool capture_ready = false;
+_Atomic bool capture_ready = false;
 
 void i2s_dma_handler() {
     capture_count++;
@@ -51,7 +54,7 @@ void i2s_dma_handler() {
     dma_hw->ints0 = 1u << handler_dma_channel;
 
     // All DMA channels should have finished at once (the PIO's are synchronised)
-    // We we can and need to re-trigger all 3
+    // So we can, and need, to re-trigger all 3
 
     // Give the channel a new buffer pointer, and re-trigger it
     dma_channel_set_write_addr(dma_chan0, capture_buf_data0, true);
@@ -113,7 +116,7 @@ int main() {
 
     // PIO setup for i2s capture
     PIO pio = pio0;
-    i2s_program_load(pio, AUDIO_SAMPLE_RATE_HZ, I2S_CLK_PIN, I2S_WS_PIN, I2S_DATA0_PIN, I2S_DATA1_PIN, I2S_DATA2_PIN);
+    i2s_program_load(pio, AUDIO_SAMPLE_RATE_HZ, I2S_CLK_PIN, I2S_WS_PIN, I2S_DATA0_PIN, I2S_DATA1_PIN, I2S_DATA2_PIN, TEST_PIN);
 
     // DMA Setup
     i2s_dma_setup(pio);
@@ -128,17 +131,14 @@ int main() {
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    for (int i=0; ;++i) {
-        gpio_put(LED_PIN, 1);
-        printf("Hello, world! %d, cnt %d, bufs %ld\n", i, capture_count, sizeof(capture_buf_data0)*3);
-        sleep_ms(50);
-
+    while(true) {
         gpio_put(LED_PIN, 0);
-        sleep_ms(2000);
-
-        if (capture_ready) {
-            analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0, capture_buf_data1, capture_buf_data2);
+        while (!capture_ready) {
+            //busy loop
         }
+        gpio_put(LED_PIN, 1);
+        analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0, capture_buf_data1, capture_buf_data2);
+        gpio_put(LED_PIN, 0);
     }
     
     return 0;

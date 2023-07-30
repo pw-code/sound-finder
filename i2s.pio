@@ -49,21 +49,22 @@ right_bits:
 ; This reads in bits of actual i2s data (one state machine instance per bus)
 ; -----------------
 .program i2s_data
+.side_set 1 opt
 
-    set y, 0                ; WS substitute - to match ws state in i2s clocks prog
-                            ; No matching instruction in clock prog.
-                            ; Because we want to sample just as clock falls, so we are 1 clock behind is2 clocks
+    set y, 0                   [1]   ;WS substitute - to match ws state in i2s clocks prog - plus 1 cycle delay
+                                     ;No matching instruction in clock prog.
+                                     ;Because we want to sample on second clock (1 clock cycle behind is2 clocks, see INMP441 datasheet)
 
 .wrap_target
 
-    set x, 30               ; 32 bits per word, but last handled differently
+    set x, 30                        ;32 bits per word, but last handled differently
 read_bits:
-    in  pins, 1
-    jmp x-- read_bits
+    in  pins, 1         side 1       ;side pins used for debugging only (high when we sample - to check in sync with clock)
+    jmp x-- read_bits   side 0
 
     ; bit 32 (in 2 instructions to match loop size)
-    in y, 1                 ; last bit is now WS indicator
-    push                    ; non blocking (we must not get out of sync with clocks).
+    in y, 1             side 1       ;last bit is now WS indicator
+    push                side 0       ;non blocking (we must not get out of sync with clocks).
 
     ; prepare for next work
     mov y, !y               ; flip Y (toggle channel)
@@ -81,7 +82,7 @@ const int sm_data2 = 2;
 const int sm_clocks = 3;
 
 
-static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, uint pin_ws, uint pin_data0, uint pin_data1, uint pin_data2) {
+static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, uint pin_ws, uint pin_data0, uint pin_data1, uint pin_data2, uint test_pin) {
 
     //Inputs must be consecutive pins
     assert(pin_data1 == pin_data0 + 1);
@@ -105,6 +106,7 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     sm_config_set_in_pins(&cfg_data0, pin_data0);
     sm_config_set_in_pins(&cfg_data1, pin_data1);
     sm_config_set_in_pins(&cfg_data2, pin_data2);
+    sm_config_set_sideset_pins(&cfg_data0, test_pin);  //DEBUG capture timing
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin_clk);
@@ -112,32 +114,36 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     pio_gpio_init(pio, pin_data0);
     pio_gpio_init(pio, pin_data1);
     pio_gpio_init(pio, pin_data2);
+    pio_gpio_init(pio, test_pin);
 
     // Set the pin directions - clk and ws are output, start low
-    pio_sm_set_pins_with_mask(pio, sm_clocks, 0, (1u<<pin_clk) | (1u << pin_ws));
-    pio_sm_set_pindirs_with_mask(pio, sm_clocks, -1, (1u<<pin_clk) | (1u << pin_ws));
+    const uint32_t out_pins_mask = (1u<<pin_clk) | (1u << pin_ws) | (1u << test_pin);
+    pio_sm_set_pins_with_mask(pio, sm_clocks, 0, out_pins_mask);
+    pio_sm_set_pindirs_with_mask(pio, sm_clocks, -1, out_pins_mask);
 
+    // Word size and MSB/LSB
     sm_config_set_in_shift(&cfg_data0,
             false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
             false,  // autopush: false
-            24);     // bits: n/a, not auto
+            32);     // bits: n/a, not auto
     sm_config_set_in_shift(&cfg_data1,
             false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
             false,  // autopush: false
-            24);     // bits: n/a, not auto
+            32);     // bits: n/a, not auto
     sm_config_set_in_shift(&cfg_data2,
             false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
             false,  // autopush: false
-            24);     // bits: n/a, not auto
+            32);     // bits: n/a, not auto
 
     // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
-    sm_config_set_fifo_join(&cfg_data0, PIO_FIFO_JOIN_RX);
-    sm_config_set_fifo_join(&cfg_data1, PIO_FIFO_JOIN_RX);
-    sm_config_set_fifo_join(&cfg_data2, PIO_FIFO_JOIN_RX);
+//    sm_config_set_fifo_join(&cfg_data0, PIO_FIFO_JOIN_RX);
+//    sm_config_set_fifo_join(&cfg_data1, PIO_FIFO_JOIN_RX);
+//    sm_config_set_fifo_join(&cfg_data2, PIO_FIFO_JOIN_RX);
 
     //2.1MHz clock (TODO: needs to be faster because we have multiple PIO instructions per I2S SLK ?)
-    const uint i2s_rate_hz = sample_rate_hz * 2 * 24; // 2 channels, 24bits each
-    const float pio_cycles_per_i2s_clock = ((24*2) + 4) / 24.0; //overage the total instructions over the 24bits cycle (loop, set+in,in,push)
+    const int nbits = 32;
+    const uint i2s_rate_hz = sample_rate_hz * 2 * nbits; // 2 channels, 32bits each
+    const float pio_cycles_per_i2s_clock = (float)((nbits*2) + 2) / 32.0; //overage the total instructions over the 24bits cycle (loop,set/mov)
     const float div = (float)clock_get_hz(clk_sys) / (i2s_rate_hz * pio_cycles_per_i2s_clock);
     //all the same
     sm_config_set_clkdiv(&cfg_clocks, div);
@@ -146,10 +152,10 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     sm_config_set_clkdiv(&cfg_data2,  div);
 
     // Configure and start all 4 state machines **at the same time** (so they are in sync)
-    pio_sm_init(pio, 0, data_offset,   &cfg_data0 );
-    pio_sm_init(pio, 1, data_offset,   &cfg_data1 );
-    pio_sm_init(pio, 2, data_offset,   &cfg_data2 );
-    pio_sm_init(pio, 3, clocks_offset, &cfg_clocks);
+    pio_sm_init(pio, sm_data0,  data_offset,   &cfg_data0 );
+    pio_sm_init(pio, sm_data1,  data_offset,   &cfg_data1 );
+    pio_sm_init(pio, sm_data2,  data_offset,   &cfg_data2 );
+    pio_sm_init(pio, sm_clocks, clocks_offset, &cfg_clocks);
 
     // set all enabled
     //started in main() after DMA setup 

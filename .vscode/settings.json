@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "i2s.pio": "asm",
         "i2s.pio.h": "c",
         "pio.h": "c",
         "stdio.h": "c",
