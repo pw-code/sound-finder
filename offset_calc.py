@@ -14,7 +14,7 @@ DEPTH=10        # y axis
 HEIGHT=3        # z axis
 
 NUM_CHANNELS=6
-SAMPLE_RATE_HZ=30000 # see main.c
+SAMPLE_RATE_HZ=44100 # see main.c
 
 SPEED_OF_SOUND=343   #343 m / sec
 

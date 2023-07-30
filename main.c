@@ -16,23 +16,23 @@ const int LED_PIN = PICO_DEFAULT_LED_PIN;
 // All INPUT pins (data 0,1,2 & WS) must be consequtive GPIO's for PIO to address.
 // GP2 .. GP8
 const int I2S_CLK_PIN   = 2;
+const int I2S_WS_PIN    = 3;
 //skip GP4,GP5 in case we want to use I2C0 (SDA/SCL)
 const int I2S_DATA0_PIN = 6;
 const int I2S_DATA1_PIN = 7;
 const int I2S_DATA2_PIN = 8;
-const int I2S_WS_PIN    = 9;
 
 const int TEST_PIN      = 11;
 
 
-#define AUDIO_SAMPLE_RATE_HZ 30000     /* With nyquist limit this should give is up to 15khz sounds. Good enough with too much data. */
+#define AUDIO_SAMPLE_RATE_HZ 44100
 
 #if AUDIO_SAMPLE_RATE_HZ != SAMPLE_OFFSET_HZ
 # error ("Mismatched sample rates " AUDIO_SAMPLE_RATE_NZ " != " SAMPLE_OFFSET_HZ)
 #endif
 
 // Audio buffers. These must fit in ram (only 260kb total)
-#define AUDIO_SAMPLE_MILLISECONDS 250   /* 250ms per capture */
+#define AUDIO_SAMPLE_MILLISECONDS 100   /* ms per capture */
 #define AUDIO_CHANNEL_BUF_SIZE (AUDIO_SAMPLE_RATE_HZ * 2 * AUDIO_SAMPLE_MILLISECONDS) / 1000
 
 uint32_t capture_buf_data0[AUDIO_CHANNEL_BUF_SIZE];
@@ -122,7 +122,7 @@ int main() {
     i2s_dma_setup(pio);
 
     // Start PIO (**at the same time** and in sync)
-    pio_enable_sm_mask_in_sync(pio, 0x0f); //all 4 at once!!
+    pio_enable_sm_mask_in_sync(pio, (1u << sm_clocks) | (1u << sm_data0) | (1u << sm_data1) | (1u << sm_data2));
 
     //trigger analysis on the second core
 //    multicore_launch_core1(core1_main);
@@ -133,9 +133,11 @@ int main() {
 
     while(true) {
         gpio_put(LED_PIN, 0);
-        while (!capture_ready) {
-            //busy loop
-        }
+        // while (!capture_ready) {
+        //     //busy loop
+        // }
+        dma_channel_wait_for_finish_blocking(dma_chan0);
+
         gpio_put(LED_PIN, 1);
         analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0, capture_buf_data1, capture_buf_data2);
         gpio_put(LED_PIN, 0);

@@ -1,20 +1,10 @@
 ;
 ; Implements 6 I2S inputs using PIO across 3 data lines and shared clock and WS
 ;
-; INMP441 MEMS microphone, 24bits.
+; INMP441 MEMS microphone, 24bits - but it needs 32bits clocked.
 ; Aim for WS freq 44kHZ (max is 50kHz)
-;         SCK freq 2116.8kHz, 2.1MHz (44kHz * 24bits * 2 channels) (max is 3.2MHz)
 ;
-; We are receiving 6x 24bits of data (but in alternate 3x 24bit channels)
-; So output data as 3x 8 bit blocks, with the high byte encoding the packet type.
-; Type contains left/right channel marker (C) (0 left, 1 right), byte count (B) (0..2 to indicate which of the 24 bits this byte is)
-; The remaining 3 bytes are 8bits each from each channel (0,1,2), interleaved as we read them. CPU will have to unpack these.
-;   MSG                             LSB
-;   xxxxxCBB 01201201 20120120 12012012
-;
-; We use one whole GPIO
-;   * One state machine manages the i2s clocks (CLK & WS)
-;   * The other 3 all handle one i2s data bus
+; We use the bit 0 (LSB) as a indicator of WS in the output for easier CPU decoding (distinguish channels)
 ;
 
 
@@ -116,6 +106,11 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     pio_gpio_init(pio, pin_data2);
     pio_gpio_init(pio, test_pin);
 
+    // pulldowns for i2s data
+    gpio_pull_down(pin_data0);
+    gpio_pull_down(pin_data1);
+    gpio_pull_down(pin_data2);
+
     // Set the pin directions - clk and ws are output, start low
     const uint32_t out_pins_mask = (1u<<pin_clk) | (1u << pin_ws) | (1u << test_pin);
     pio_sm_set_pins_with_mask(pio, sm_clocks, 0, out_pins_mask);
@@ -143,7 +138,7 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     //2.1MHz clock (TODO: needs to be faster because we have multiple PIO instructions per I2S SLK ?)
     const int nbits = 32;
     const uint i2s_rate_hz = sample_rate_hz * 2 * nbits; // 2 channels, 32bits each
-    const float pio_cycles_per_i2s_clock = (float)((nbits*2) + 2) / 32.0; //overage the total instructions over the 24bits cycle (loop,set/mov)
+    const float pio_cycles_per_i2s_clock = ((nbits*2) + 2) / (float)nbits; //overage the total instructions over the 32bit cycle
     const float div = (float)clock_get_hz(clk_sys) / (i2s_rate_hz * pio_cycles_per_i2s_clock);
     //all the same
     sm_config_set_clkdiv(&cfg_clocks, div);

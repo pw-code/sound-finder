@@ -13,7 +13,7 @@
 #define SAMPLE_OFFSET_DEPTH 10 /* y axis */
 #define SAMPLE_OFFSET_HEIGHT 3 /* z axis */
 #define SAMPLE_OFFSET_NUM_CHANNELS 6
-#define SAMPLE_OFFSET_HZ  30000
+#define SAMPLE_OFFSET_HZ 44100
 
 /* Sample Offsets[x,y,z,chan] */
 extern const int sample_offsets[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT][SAMPLE_OFFSET_NUM_CHANNELS];
