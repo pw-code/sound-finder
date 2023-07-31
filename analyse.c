@@ -17,10 +17,12 @@ void analyse_last_capture(uint capture_length, uint32_t* capture_buf_data0, uint
         //low byte tells us which channel
         if ((capture_buf_data0[i] & 1) == 0) {
             //output in blocks to improve speed (buffered), plus skip printf as it is slow too.
-            uint32_t val = capture_buf_data0[i];
-            //big-endian format
-            for (int b=32-4; b>=0; b-=4) {
-                buf[p++] = HEX_DIGITS[(val>>b) & 0xF];
+            //pico is little endian, so we are writing little-endian data 
+            uint8_t * pVal = (uint8_t*)(&capture_buf_data0[i]);
+            for (int byt=0; byt<4; ++byt) {
+                buf[p++] = HEX_DIGITS[(*pVal>>4) & 0xF];
+                buf[p++] = HEX_DIGITS[(*pVal)    & 0xF];
+                pVal++;
             }
             buf[p++] = ' ';
             if (p >= (sizeof(buf) - sizeof(uint32_t)*2)) {
