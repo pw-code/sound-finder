@@ -35,68 +35,104 @@ const int TEST_PIN      = 11;
 #define AUDIO_SAMPLE_MILLISECONDS 100   /* ms per capture */
 #define AUDIO_CHANNEL_BUF_SIZE (AUDIO_SAMPLE_RATE_HZ * 2 * AUDIO_SAMPLE_MILLISECONDS) / 1000
 
-uint32_t capture_buf_data0[AUDIO_CHANNEL_BUF_SIZE];
-uint32_t capture_buf_data1[AUDIO_CHANNEL_BUF_SIZE];
-uint32_t capture_buf_data2[AUDIO_CHANNEL_BUF_SIZE];
+//double-buffer between DMA samples
+uint32_t capture_buf_data0[2][AUDIO_CHANNEL_BUF_SIZE];
+uint32_t capture_buf_data1[2][AUDIO_CHANNEL_BUF_SIZE];
+uint32_t capture_buf_data2[2][AUDIO_CHANNEL_BUF_SIZE];
 
 extern void analyse_last_capture(uint capture_length, uint32_t* capture_buf_data0, uint32_t* capture_buf_data1, uint32_t* capture_buf_data2);
 
-uint handler_dma_channel, dma_chan0, dma_chan1, dma_chan2;
+uint handler_dma_channel_0, handler_dma_channel_1;
+uint dma_chan0_0, dma_chan0_1;
+uint dma_chan1_0, dma_chan1_1;
+uint dma_chan2_0, dma_chan2_1;
 
 volatile uint32_t capture_count = 0;
-_Atomic bool capture_ready = false;
 
-void i2s_dma_handler() {
+void i2s_dma_handler_0() {
     capture_count++;
-    capture_ready = true;
 
     // clear the interrupt
-    dma_hw->ints0 = 1u << handler_dma_channel;
+    dma_hw->ints0 = 1u << handler_dma_channel_0;
 
     // All DMA channels should have finished at once (the PIO's are synchronised)
-    // So we can, and need, to re-trigger all 3
 
-    // Give the channel a new buffer pointer, and re-trigger it
-    dma_channel_set_write_addr(dma_chan0, capture_buf_data0, true);
-    dma_channel_set_write_addr(dma_chan1, capture_buf_data1, true);
-    dma_channel_set_write_addr(dma_chan2, capture_buf_data2, true);
+    // Reset buffer, ready for next time we are triggered/chained
+    dma_channel_set_write_addr(dma_chan0_0, capture_buf_data0[0], false);
+    dma_channel_set_write_addr(dma_chan1_0, capture_buf_data1[0], false);
+    dma_channel_set_write_addr(dma_chan2_0, capture_buf_data2[0], false);
+}
+
+void i2s_dma_handler_1() {
+    capture_count++;
+
+    // clear the interrupt
+    dma_hw->ints0 = 1u << handler_dma_channel_1;
+
+    // All DMA channels should have finished at once (the PIO's are synchronised)
+
+    // Reset buffer, ready for next time we are triggered/chained
+    dma_channel_set_write_addr(dma_chan0_1, capture_buf_data0[1], false);
+    dma_channel_set_write_addr(dma_chan1_1, capture_buf_data1[1], false);
+    dma_channel_set_write_addr(dma_chan2_1, capture_buf_data2[1], false);
 }
 
 
-static void i2s_dma_setup_sm(PIO pio, uint sm, uint32_t* capture_buf, bool add_interrupt) {
+static void i2s_dma_setup_sm(PIO pio, uint sm, uint32_t *capture_buf0, uint32_t *capture_buf1, uint* pChan0, uint* pChan1, bool add_interrupt) {
 
-    uint dma_chan = dma_claim_unused_channel(true);
+    // Two alternative DMA transfers, with different buffers (reloaded in interrupt handler)
 
-    dma_channel_config c = dma_channel_get_default_config(dma_chan);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_read_increment(&c, false);
-    channel_config_set_write_increment(&c, true);
+    *pChan0 = dma_claim_unused_channel(true);
+    *pChan1 = dma_claim_unused_channel(true);
 
-    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
-
-    dma_channel_configure(dma_chan, &c,
-        capture_buf,            // Destination pointer
+    dma_channel_config c0 = dma_channel_get_default_config(*pChan0);
+    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);
+    channel_config_set_read_increment(&c0, false);
+    channel_config_set_write_increment(&c0, true);
+    channel_config_set_dreq(&c0, pio_get_dreq(pio, sm, false));
+    channel_config_set_chain_to(&c0, *pChan1);
+    dma_channel_configure(*pChan0, &c0,
+        capture_buf0,           // Destination pointer
         &pio->rxf[sm],          // Source pointer
         AUDIO_CHANNEL_BUF_SIZE, // Number of transfers
-        true                    // Start immediately
+        false                   // Start later
+    );
+
+    dma_channel_config c1 = dma_channel_get_default_config(*pChan1);
+    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);
+    channel_config_set_read_increment(&c1, false);
+    channel_config_set_write_increment(&c1, true);
+    channel_config_set_dreq(&c1, pio_get_dreq(pio, sm, false));
+    channel_config_set_chain_to(&c1, *pChan0);
+    dma_channel_configure(*pChan1, &c1,
+        capture_buf1,           // Destination pointer
+        &pio->rxf[sm],          // Source pointer
+        AUDIO_CHANNEL_BUF_SIZE, // Number of transfers
+        false                   // Start later, when chained
     );
 
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block?
     if (add_interrupt) {
-        dma_channel_set_irq0_enabled(dma_chan, true);
-
-        irq_set_exclusive_handler(DMA_IRQ_0, i2s_dma_handler);
+        dma_channel_set_irq0_enabled(*pChan0, true);
+        irq_set_exclusive_handler(DMA_IRQ_0, i2s_dma_handler_0);
         irq_set_enabled(DMA_IRQ_0, true);
+        handler_dma_channel_0 = *pChan0;
 
-        handler_dma_channel = dma_chan;
+        dma_channel_set_irq1_enabled(*pChan1, true);
+        irq_set_exclusive_handler(DMA_IRQ_1, i2s_dma_handler_1);
+        irq_set_enabled(DMA_IRQ_1, true);
+        handler_dma_channel_1 = *pChan1;
     }
+
+    // Trigger channel 0 now, it will chain to channel 1
+    dma_channel_start(*pChan0);
 }
 
 static void i2s_dma_setup(PIO pio) {
     // 1 DMA per buffer / PIO state machine
-    i2s_dma_setup_sm(pio, sm_data0,  capture_buf_data0, true);
-    i2s_dma_setup_sm(pio, sm_data1,  capture_buf_data1, false);
-    i2s_dma_setup_sm(pio, sm_data2,  capture_buf_data2, false);
+    i2s_dma_setup_sm(pio, sm_data0, capture_buf_data0[0], capture_buf_data0[1], &dma_chan0_0, &dma_chan0_1, true);
+    i2s_dma_setup_sm(pio, sm_data1, capture_buf_data1[0], capture_buf_data1[1], &dma_chan1_0, &dma_chan1_1, false);
+    i2s_dma_setup_sm(pio, sm_data2, capture_buf_data2[0], capture_buf_data2[1], &dma_chan2_0, &dma_chan2_1, false);
 }
 
 
@@ -130,18 +166,21 @@ int main() {
     // LED flashing
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
+    gpio_put(LED_PIN, 0);
 
     while(true) {
-        gpio_put(LED_PIN, 0);
-        // while (!capture_ready) {
-        //     //busy loop
-        // }
-        dma_channel_wait_for_finish_blocking(dma_chan0);
+        // wait for alternate DMA buffers to fill, and then process each
 
+        dma_channel_wait_for_finish_blocking(dma_chan0_0);
         gpio_put(LED_PIN, 1);
-        analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0, capture_buf_data1, capture_buf_data2);
+        analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0[0], capture_buf_data1[0], capture_buf_data2[0]);
         gpio_put(LED_PIN, 0);
-    }
+
+        dma_channel_wait_for_finish_blocking(dma_chan0_1);
+        gpio_put(LED_PIN, 1);
+        analyse_last_capture(AUDIO_CHANNEL_BUF_SIZE, capture_buf_data0[1], capture_buf_data1[1], capture_buf_data2[1]);
+        gpio_put(LED_PIN, 0);
+   }
     
     return 0;
 }

@@ -54,7 +54,7 @@ read_bits:
 
     ; bit 32 (in 2 instructions to match loop size)
     in y, 1             side 1       ;last bit is now WS indicator
-    push                side 0       ;non blocking (we must not get out of sync with clocks).
+    push noblock        side 0       ;non blocking (we must not get out of sync with clocks).
 
     ; prepare for next work
     mov y, !y               ; flip Y (toggle channel)
@@ -131,9 +131,9 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
             32);     // bits: n/a, not auto
 
     // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
-//    sm_config_set_fifo_join(&cfg_data0, PIO_FIFO_JOIN_RX);
-//    sm_config_set_fifo_join(&cfg_data1, PIO_FIFO_JOIN_RX);
-//    sm_config_set_fifo_join(&cfg_data2, PIO_FIFO_JOIN_RX);
+    sm_config_set_fifo_join(&cfg_data0, PIO_FIFO_JOIN_RX);
+    sm_config_set_fifo_join(&cfg_data1, PIO_FIFO_JOIN_RX);
+    sm_config_set_fifo_join(&cfg_data2, PIO_FIFO_JOIN_RX);
 
     //2.1MHz clock (TODO: needs to be faster because we have multiple PIO instructions per I2S SLK ?)
     const int nbits = 32;
@@ -151,6 +151,11 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     pio_sm_init(pio, sm_data1,  data_offset,   &cfg_data1 );
     pio_sm_init(pio, sm_data2,  data_offset,   &cfg_data2 );
     pio_sm_init(pio, sm_clocks, clocks_offset, &cfg_clocks);
+
+    pio_sm_clear_fifos(pio, sm_data0);
+    pio_sm_clear_fifos(pio, sm_data1);
+    pio_sm_clear_fifos(pio, sm_data2);
+    pio_sm_clear_fifos(pio, sm_clocks);
 
     // set all enabled
     //started in main() after DMA setup 
