@@ -4,6 +4,7 @@
         "i2s.pio.h": "c",
         "pio.h": "c",
         "stdio.h": "c",
-        "dma.h": "c"
+        "dma.h": "c",
+        "audio.h": "c"
     }
 }
