@@ -5,6 +5,7 @@
         "pio.h": "c",
         "stdio.h": "c",
         "dma.h": "c",
-        "audio.h": "c"
+        "audio.h": "c",
+        "video.h": "c"
     }
 }

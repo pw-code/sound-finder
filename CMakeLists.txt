@@ -13,15 +13,20 @@ pico_sdk_init()
 
 add_executable(sound-finder
     main.c
-    main1.c
     audio.h
     audio.c
     offsets.h
     offsets.c
     pins.h
+    video.h
+    video.c
+    ov7670reg.h
+    ili9341.h
 )
 
 pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)
+
+pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/ov7670.pio)
 
 # Add pico_stdlib library which aggregates commonly used features
 target_link_libraries(sound-finder 
@@ -29,6 +34,9 @@ target_link_libraries(sound-finder
     pico_multicore
     hardware_pio
     hardware_dma
+    hardware_i2c
+    hardware_spi
+    hardware_pwm
     )
 
 # create map/bin/hex/uf2 file in addition to ELF.
@@ -40,7 +48,7 @@ pico_add_extra_outputs(sound-finder)
 
 # printf to usb/serial/both? (1=on, 0=off)
 pico_enable_stdio_usb(sound-finder 1)
-pico_enable_stdio_uart(sound-finder 0)
+pico_enable_stdio_uart(sound-finder 0) #We are using the UART pins 
 
 # support upload and monitoring from "make upload" and "make monitor"
 add_custom_target(upload 

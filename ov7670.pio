@@ -1,0 +1,78 @@
+;
+; Implements reading of OV7670 video
+;
+; We only read 1 line of video data (the requested line is set to ov7670_clocks)
+;
+
+.program ov7670
+
+.wrap_target
+    pull                    ; read requested line (block until we are asked for one)
+    mov x, osr              ; store for counting
+
+    ; wait for vsync        ; #define PIN_OV7670_VSYNC  15
+    wait 1 GPIO 15
+
+    ; count hsync           ; #define PIN_OV7670_HREF   14
+wait_line:
+    wait 0 GPIO 14
+    wait 1 GPIO 14
+    jmp x-- wait_line
+
+    ; byte 0
+pixel_wait_0:
+    jmp PIN pixel_read_0    ; jmp on pixel clock high
+    jmp pixel_wait_0
+pixel_read_0:
+    in pins, 8              ; 8 parallel pin bits
+    wait 0 GPIO 26          ; wait for end of pixel (#define PIN_OV7670_PCLK   26)
+
+    ; byte 1
+pixel_wait_1:
+    jmp PIN pixel_read_1    ; jmp on pixel clock high
+    jmp pixel_wait_1
+pixel_read_1:
+    in pins, 8              ; 8 parallel pin bits
+    wait 0 GPIO 26          ; wait for end of pixel (#define PIN_OV7670_PCLK   26)
+
+.wrap
+
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+// Which state machine for which function?
+const int sm_ov7670 = 0;
+
+static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_base) {
+
+    uint offset = pio_add_program(pio, &ov7670_program);
+    pio_sm_config cfg = ov7670_program_get_default_config(offset);
+
+    //OV7670 datasheet says typical speed is 24MHz for input clock
+//    const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000);
+const float div = (float)clock_get_hz(clk_sys) / (8 * 1000 * 1000); //DEBUG 8Mhz so logic analyser can see it better
+    sm_config_set_clkdiv(&cfg, div);
+
+    sm_config_set_in_pins(&cfg, pin_data_base);
+    sm_config_set_jmp_pin(&cfg, pin_pclk);
+
+    // Set the pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, pin_pclk);
+    for (uint i=0; i<8; ++i) {
+        pio_gpio_init(pio, pin_data_base+i);
+    }
+
+    // Word size and MSB/LSB
+    sm_config_set_in_shift(&cfg,
+            false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
+            true,   // autopush?
+            16);    // bits per sample
+
+    // Configure and start
+    pio_sm_init(pio, sm_ov7670, offset, &cfg);
+    pio_sm_clear_fifos(pio, sm_ov7670);
+    pio_sm_set_enabled(pio, sm_ov7670, true);
+}
+
+%}
