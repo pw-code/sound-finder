@@ -15,6 +15,18 @@
 
 #include "ov7670.pio.h"
 
+//Validate pins.h and ov7670.pio agree on fixed GPIO pin assignments
+#if PIN_OV7670_HREF != ov7670_pio_href_pin
+# error ("Mismatched OV7670 HREF pin")
+#endif
+#if PIN_OV7670_VSYNC != ov7670_pio_vsync_pin
+# error ("Mismatched OV7670 VSYNC pin")
+#endif
+#if PIN_OV7670_PCLK != ov7670_pio_pclk_pin
+# error ("Mismatched OV7670 PCLK pin")
+#endif
+
+
 //OV7670: QVGA: 320x240
 #define VIDEO_COLUMNS 320
 #define VIDEO_ROWS    240
@@ -214,6 +226,8 @@ void video_init(PIO pio) {
     gpio_set_dir(PIN_OV7670_HREF, GPIO_IN);
     gpio_init(PIN_OV7670_VSYNC);
     gpio_set_dir(PIN_OV7670_VSYNC, GPIO_IN);
+    gpio_init(PIN_OV7670_PCLK);
+    gpio_set_dir(PIN_OV7670_PCLK, GPIO_IN);
 
     // Load OV7670 pixel loader
     ov7670_program_load(pio, PIN_OV7670_PCLK, PIN_OV7670_D0);

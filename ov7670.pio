@@ -6,34 +6,39 @@
 
 .program ov7670
 
+;defines that we will later assert (in video.c) are the same as in pins.h
+.define public pio_href_pin  13
+.define public pio_vsync_pin 14
+.define public pio_pclk_pin  15
+
+
 .wrap_target
-    pull                    ; read requested line (block until we are asked for one)
-    mov x, osr              ; store for counting
+    pull                        ; read requested line (block until we are asked for one)
+    mov x, osr                  ; store for counting
 
-    ; wait for vsync        ; #define PIN_OV7670_VSYNC  15
-    wait 1 GPIO 15
+    wait 1 GPIO pio_vsync_pin   ; wait for vsync
 
-    ; count hsync           ; #define PIN_OV7670_HREF   14
-wait_line:
-    wait 0 GPIO 14
-    wait 1 GPIO 14
+    
+wait_line:                      ; count hsync lines
+    wait 0 GPIO pio_href_pin
+    wait 1 GPIO pio_href_pin
     jmp x-- wait_line
 
     ; byte 0
 pixel_wait_0:
-    jmp PIN pixel_read_0    ; jmp on pixel clock high
+    jmp PIN pixel_read_0        ; jmp on pixel clock high
     jmp pixel_wait_0
 pixel_read_0:
-    in pins, 8              ; 8 parallel pin bits
-    wait 0 GPIO 26          ; wait for end of pixel (#define PIN_OV7670_PCLK   26)
+    in pins, 8                  ; 8 parallel pin bits
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
 
     ; byte 1
 pixel_wait_1:
-    jmp PIN pixel_read_1    ; jmp on pixel clock high
+    jmp PIN pixel_read_1        ; jmp on pixel clock high
     jmp pixel_wait_1
 pixel_read_1:
-    in pins, 8              ; 8 parallel pin bits
-    wait 0 GPIO 26          ; wait for end of pixel (#define PIN_OV7670_PCLK   26)
+    in pins, 8                  ; 8 parallel pin bits
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
 
 .wrap
 
@@ -50,9 +55,9 @@ static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_bas
     pio_sm_config cfg = ov7670_program_get_default_config(offset);
 
     //OV7670 datasheet says typical speed is 24MHz for input clock
-//    const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000);
-const float div = (float)clock_get_hz(clk_sys) / (8 * 1000 * 1000); //DEBUG 8Mhz so logic analyser can see it better
-    sm_config_set_clkdiv(&cfg, div);
+    //We are running XCLK at the correct rate, but we need the state machine faster to catch clock edges properly
+    //So we have no divider
+    sm_config_set_clkdiv(&cfg, 1);
 
     sm_config_set_in_pins(&cfg, pin_data_base);
     sm_config_set_jmp_pin(&cfg, pin_pclk);

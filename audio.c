@@ -3,6 +3,8 @@
 
 #include "audio.h"
 #include "offsets.h"
+
+//Validate audio.h and generated offsets.h agree on sample rate (would affect positioning calculations)
 #if AUDIO_SAMPLE_RATE_HZ != SAMPLE_OFFSET_HZ
 # error ("Mismatched sample rates " AUDIO_SAMPLE_RATE_NZ " != " SAMPLE_OFFSET_HZ)
 #endif

@@ -27,13 +27,11 @@
 #define PIN_OV7670_D5     10
 #define PIN_OV7670_D6     11
 #define PIN_OV7670_D7     12
-#define PIN_OV7670_D8     13
+#define PIN_OV7670_HREF   13
+#define PIN_OV7670_VSYNC  14
+#define PIN_OV7670_PCLK   15
 
-#define PIN_OV7670_HREF   14
-#define PIN_OV7670_VSYNC  15
-
-// fit these around the SPI & I2C pins
-#define PIN_OV7670_PCLK   26
+// PWM pin. Fit these around the SPI & I2C pins
 #define PIN_OV7670_XCLK   22
 
 // Data/Command interface (I2C)  (Using I2C0)
@@ -47,10 +45,10 @@
 
 #define PIN_LCD_DC        17
 
-#define PIN_LCD_CS        27
-#define PIN_SDCARD_CS     28
+#define PIN_LCD_CS        26
+#define PIN_SDCARD_CS     27
 
 
-// reusing the LCD DS pin as a test pin (for logic analser to 'see' program states)
-// only usable when not actively writing to the LCD
-#define PIN_TEST       PIN_LCD_DC
+// Test pin (for logic analser to 'see' program states)
+#define PIN_TEST          28
+// TODO: Consider using GP25 (LED) which is available on TP5 (test point 5 on rear)

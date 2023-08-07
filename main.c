@@ -35,7 +35,6 @@ int main() {
     bi_decl(bi_1pin_with_name(PIN_OV7670_D5, "OV7670 D5"));
     bi_decl(bi_1pin_with_name(PIN_OV7670_D6, "OV7670 D6"));
     bi_decl(bi_1pin_with_name(PIN_OV7670_D7, "OV7670 D7"));
-    bi_decl(bi_1pin_with_name(PIN_OV7670_D8, "OV7670 D8"));
 
     bi_decl(bi_1pin_with_name(PIN_SPI_SCK,  "LCD SCK"));
     bi_decl(bi_1pin_with_name(PIN_SPI_MOSI, "LCD MOSI"));
