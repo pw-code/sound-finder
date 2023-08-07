@@ -27,45 +27,92 @@
 #endif
 
 
-//OV7670: QVGA: 320x240
+// OV7670: QVGA: 320x240
+// Also TFT LCD: 240x320 (will need rotation during output)
 #define VIDEO_COLUMNS 320
 #define VIDEO_ROWS    240
 
-// using RGB565 encoding (16 bits) - but we only hold 1 row at a time (limited RAM while we wait for SPI writes to the LCD)
-// 1 extra value holds the row number that this buffer holds
-uint16_t video_buffer[VIDEO_COLUMNS];
-uint16_t video_buffer_lcd[VIDEO_COLUMNS];
+// Using RGB565 encoding (16 bits).
+// But we are low on RAM. So instead of holding a full display here, we hold 2 DMA buffers, 
+// which are populated with whole rows from the PIO program.
+// Each row starts with 16bits holding the row number, then Columns*16bits of pixel data.
+uint16_t video_buffer[2][1 + VIDEO_COLUMNS];
+uint16_t video_buffer_lcd[1 + VIDEO_COLUMNS];
+_Atomic uint8_t last_video_buf;
 
 PIO ov7670_pio;
-uint dma_pixel_chan;
+
+uint dma_pixel_chan_0;
+uint dma_pixel_chan_1;
+
 i2c_inst_t *ov7670_i2c;
 spi_inst_t *lcd_spi;
 
 //====================================================================================================
 
-static void pixel_dma_restart() {
-    dma_channel_abort(dma_pixel_chan); //if it was still running
-    dma_channel_set_write_addr(dma_pixel_chan, video_buffer, true);
+void pixel_dma_handler() {
+    // which DMA channel triggered IRQ 1?
+    if (dma_channel_get_irq1_status(dma_pixel_chan_0)) {
+
+        //channel 0
+        last_video_buf = 0;
+        // clear the interrupt
+        dma_channel_acknowledge_irq1(dma_pixel_chan_0);
+        // Reset buffer, ready for next time we are triggered/chained
+        dma_channel_set_write_addr(dma_pixel_chan_0, video_buffer[0], false);
+
+    } else {
+
+        //channel 1
+        last_video_buf = 1;
+        // clear the interrupt
+        dma_channel_acknowledge_irq1(dma_pixel_chan_1);
+        // Reset buffer, ready for next time we are triggered/chained
+        dma_channel_set_write_addr(dma_pixel_chan_1, video_buffer[1], false);
+    }
 }
 
-static void init_pixel_dma(PIO pio) {
-    // We want to use DMA to gather all the pixel data for 1 FRAME from the OV7670
-    dma_pixel_chan = dma_claim_unused_channel(true);
 
-    dma_channel_config cfg = dma_channel_get_default_config(dma_pixel_chan);
-    channel_config_set_transfer_data_size(&cfg, DMA_SIZE_16);
-    channel_config_set_read_increment(&cfg, false);
-    channel_config_set_write_increment(&cfg, true);
-    channel_config_set_dreq(&cfg, pio_get_dreq(pio, sm_ov7670, false));
-    dma_channel_configure(dma_pixel_chan, &cfg,
-        video_buffer,           // Destination pointer
+static void init_pixel_dma(PIO pio) {
+    // We want to use DMA to gather all the pixel data in alternate row buffers
+    dma_pixel_chan_0 = dma_claim_unused_channel(true);
+    dma_pixel_chan_1 = dma_claim_unused_channel(true);
+
+    dma_channel_config cfg0 = dma_channel_get_default_config(dma_pixel_chan_0);
+    channel_config_set_transfer_data_size(&cfg0, DMA_SIZE_16);
+    channel_config_set_read_increment(&cfg0, false);
+    channel_config_set_write_increment(&cfg0, true);
+    channel_config_set_dreq(&cfg0, pio_get_dreq(pio, sm_ov7670, false));
+    channel_config_set_chain_to(&cfg0, dma_pixel_chan_1); //chain to 1
+    dma_channel_configure(dma_pixel_chan_0, &cfg0,
+        video_buffer[0],        // Destination pointer
         &pio->rxf[sm_ov7670],   // Source pointer
-        VIDEO_COLUMNS,          // Number of transfers
+        1 + VIDEO_COLUMNS,      // Number of transfers
         false                   // Start later
     );
 
-    //wait to be triggered
-    //dma_channel_start(dma_pixel_chan);
+    dma_channel_config cfg1 = dma_channel_get_default_config(dma_pixel_chan_1);
+    channel_config_set_transfer_data_size(&cfg1, DMA_SIZE_16);
+    channel_config_set_read_increment(&cfg1, false);
+    channel_config_set_write_increment(&cfg1, true);
+    channel_config_set_dreq(&cfg1, pio_get_dreq(pio, sm_ov7670, false));
+    channel_config_set_chain_to(&cfg1, dma_pixel_chan_0); //back to 0
+    dma_channel_configure(dma_pixel_chan_1, &cfg1,
+        video_buffer[1],        // Destination pointer
+        &pio->rxf[sm_ov7670],   // Source pointer
+        1 + VIDEO_COLUMNS,      // Number of transfers
+        false                   // Start later
+    );
+
+    // Tell the DMA to raise IRQ 1 when a channel finishes a block (audio.c uses IRQ 0)
+    dma_channel_set_irq1_enabled(dma_pixel_chan_0, true);
+    dma_channel_set_irq1_enabled(dma_pixel_chan_1, true);
+
+    irq_set_exclusive_handler(DMA_IRQ_1, pixel_dma_handler);
+    irq_set_enabled(DMA_IRQ_1, true);
+
+    //start chain
+    dma_channel_start(dma_pixel_chan_0);
 }
 
 //====================================================================================================
@@ -130,16 +177,6 @@ static void lcd_write_byte(uint8_t byt) {
     lcd_write_data(&byt, 1);
 }
 
-static void lcd_set_row(uint row) {
-    // page address set
-    lcd_write_command(ILI9341_PASET);
-    lcd_write_byte(0x00);
-    lcd_write_byte(row);  // start page
-    lcd_write_byte(0x01);
-    lcd_write_byte(0x3f);  // end page -> 319
-
-    lcd_write_command(ILI9341_RAMWR);
-}
 
 static void init_lcd(spi_inst_t *spi) {
     lcd_spi = spi;
@@ -285,29 +322,44 @@ void video_init(PIO pio) {
 // We add data overlays as we go.
 // It does not matter that DMA is overwriting data as we go, as video pixels are mostly the same each frame (a bit of tearing may occur)
 void video_stream() {
-
-    // request row 0
-    pixel_dma_restart();
-    pio_sm_put_blocking(ov7670_pio, sm_ov7670, 0);
-
     while (true) {
 
-        for (uint y=0; y<VIDEO_ROWS; ++y) {
-            //wait for data
-            dma_channel_wait_for_finish_blocking(dma_pixel_chan);
-            memcpy(video_buffer_lcd, video_buffer, sizeof(video_buffer));
+        // Grab copy of latest row - then send it
 
-            //set up early for the next transfer we need
-            uint next_row = y + 1;
-            if (y >= VIDEO_ROWS) { y = 0; }
-            pixel_dma_restart();
-            pio_sm_put_blocking(ov7670_pio, sm_ov7670, next_row);
+        // Wait for either of the vide IRQ DMA's to trigger (should happen pretty soon at 30fps)
+        while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) == 0) {
+            tight_loop_contents();
+        }
+        // Then wait for it to be serviced (so we can trust last_video_buf is up-to-date)
+        while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) != 0) {
+            tight_loop_contents();
+        }
+        // grab
+        memcpy(video_buffer_lcd, &video_buffer[last_video_buf], sizeof(video_buffer_lcd));
 
-            lcd_set_row(y);
-            for (uint x=0; x<VIDEO_COLUMNS; ++x) {
-                uint16_t rgb565 = video_buffer_lcd[x];
-                lcd_write_data(&rgb565, 2); //TODO translate little/big endian?
-            }
+        //restrict output to this row, then stream bytes to fill it
+        //the LCD is rotated (240x320) so we actually fill a 320 high column, 1 row
+        uint16_t row = video_buffer_lcd[0];
+
+        // column address set
+        lcd_write_command(ILI9341_CASET);
+        lcd_write_byte(0x00);
+        lcd_write_byte(row);  // start column
+        lcd_write_byte(0x00);
+        lcd_write_byte(row);  // end column -> 239
+
+        // page address set
+        lcd_write_command(ILI9341_PASET);
+        lcd_write_byte(0x00);
+        lcd_write_byte(0x00);  // start page
+        lcd_write_byte(0x01);
+        lcd_write_byte(0x3f);  // end page -> 319
+
+        lcd_write_command(ILI9341_RAMWR);
+
+        for (uint x=0; x<VIDEO_COLUMNS; ++x) {
+            uint16_t rgb565 = video_buffer_lcd[x+1];
+            lcd_write_data(&rgb565, 2); //TODO translate little/big endian?
         }
 
     }

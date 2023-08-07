@@ -1,7 +1,5 @@
 ;
-; Implements reading of OV7670 video
-;
-; We only read 1 line of video data (the requested line is set to ov7670_clocks)
+; Implements reading of OV7670 video. One line at a time.
 ;
 
 .program ov7670
@@ -13,32 +11,59 @@
 
 
 .wrap_target
-    pull                        ; read requested line (block until we are asked for one)
-    mov x, osr                  ; store for counting
-
     wait 1 GPIO pio_vsync_pin   ; wait for vsync
-
+    set y, 0                    ; row
     
 wait_line:                      ; count hsync lines
-    wait 0 GPIO pio_href_pin
     wait 1 GPIO pio_href_pin
-    jmp x-- wait_line
 
-    ; byte 0
-pixel_wait_0:
-    jmp PIN pixel_read_0        ; jmp on pixel clock high
-    jmp pixel_wait_0
-pixel_read_0:
+    in y, 16                    ; first 16 bits of each row are the row number
+    push
+
+    ; we want to read 320 pixels, but only have 1 byte
+    ; so we read 160 Pairs of pixels instead
+
+    ; cannot set x directly, so abuse the ISR to buffer 2 nibbles (160 == 0x9F)
+    set x, 0x09
+    in x, 8
+    set x, 0x0F
+    in x, 8
+    mov x, isr
+
+    ; X is now 159, ISR is empty
+
+pixel_read_160:
+
+    ; Get a pixel (16 bits)
+    wait 1 GPIO pio_pclk_pin
     in pins, 8                  ; 8 parallel pin bits
     wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
-
-    ; byte 1
-pixel_wait_1:
-    jmp PIN pixel_read_1        ; jmp on pixel clock high
-    jmp pixel_wait_1
-pixel_read_1:
+    wait 1 GPIO pio_pclk_pin
     in pins, 8                  ; 8 parallel pin bits
     wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
+    push
+
+    ; Get a pixel (16 bits)
+    wait 1 GPIO pio_pclk_pin
+    in pins, 8                  ; 8 parallel pin bits
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
+    wait 1 GPIO pio_pclk_pin
+    in pins, 8                  ; 8 parallel pin bits
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
+    push
+
+    jmp x-- pixel_read_160      ; read 2x160 = 320 pixels
+
+    ; end of row
+    ; we are counting UP the row, and want to stop and reset at 230
+    ; cannot set x directly, so abuse the ISR to buffer 2 nibbles (239 == 0xEF)
+    set x, 0x0E
+    in x, 8
+    set x, 0x0F
+    in x, 8
+    mov x, isr
+
+    jmp x!=y wait_line          ; next line in frame
 
 .wrap
 
@@ -71,7 +96,7 @@ static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_bas
     // Word size and MSB/LSB
     sm_config_set_in_shift(&cfg,
             false,  // Shift-to-right = false (i.e. shift to left, aka. MSB first)
-            true,   // autopush?
+            false,  // autopush off: we need to abuse the ISR for math!
             16);    // bits per sample
 
     // Configure and start

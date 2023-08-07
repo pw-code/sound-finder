@@ -32,32 +32,38 @@ const char HEX_DIGITS[16] = "0123456789ABCDEF";
 
 
 
-void i2s_dma_handler_0() {
+void i2s_dma_handler() {
     capture_count++;
 
-    // clear the interrupt
-    dma_hw->ints0 = 1u << handler_dma_channel_0;
+    // which DMA channel triggered IRQ 0?
+    if (dma_channel_get_irq0_status(handler_dma_channel_0)) {
 
-    // All DMA channels should have finished at once (the PIO's are synchronised)
+        //channel 0
 
-    // Reset buffer, ready for next time we are triggered/chained
-    dma_channel_set_write_addr(dma_chan0_0, capture_buf_data0[0], false);
-    dma_channel_set_write_addr(dma_chan1_0, capture_buf_data1[0], false);
-    dma_channel_set_write_addr(dma_chan2_0, capture_buf_data2[0], false);
-}
+        // clear the interrupt
+        dma_channel_acknowledge_irq0(handler_dma_channel_0);
 
-void i2s_dma_handler_1() {
-    capture_count++;
+        // All DMA channels should have finished at once (the PIO's are synchronised)
 
-    // clear the interrupt
-    dma_hw->ints0 = 1u << handler_dma_channel_1;
+        // Reset buffer, ready for next time we are triggered/chained
+        dma_channel_set_write_addr(dma_chan0_0, capture_buf_data0[0], false);
+        dma_channel_set_write_addr(dma_chan1_0, capture_buf_data1[0], false);
+        dma_channel_set_write_addr(dma_chan2_0, capture_buf_data2[0], false);
 
-    // All DMA channels should have finished at once (the PIO's are synchronised)
+    } else {
 
-    // Reset buffer, ready for next time we are triggered/chained
-    dma_channel_set_write_addr(dma_chan0_1, capture_buf_data0[1], false);
-    dma_channel_set_write_addr(dma_chan1_1, capture_buf_data1[1], false);
-    dma_channel_set_write_addr(dma_chan2_1, capture_buf_data2[1], false);
+        // channel 1
+
+        // clear the interrupt
+        dma_channel_acknowledge_irq0(handler_dma_channel_1);
+
+        // All DMA channels should have finished at once (the PIO's are synchronised)
+
+        // Reset buffer, ready for next time we are triggered/chained
+        dma_channel_set_write_addr(dma_chan0_1, capture_buf_data0[1], false);
+        dma_channel_set_write_addr(dma_chan1_1, capture_buf_data1[1], false);
+        dma_channel_set_write_addr(dma_chan2_1, capture_buf_data2[1], false);
+    }
 }
 
 
@@ -94,17 +100,16 @@ static void i2s_dma_setup_sm(PIO pio, uint sm, uint32_t *capture_buf0, uint32_t 
         false                   // Start later, when chained
     );
 
-    // Tell the DMA to raise IRQ line 0 when the channel finishes a block?
+    // Tell the DMA to raise IRQ line 0 when the channel finishes a block (video.c uses IRQ 1)
     if (add_interrupt) {
         dma_channel_set_irq0_enabled(*pChan0, true);
-        irq_set_exclusive_handler(DMA_IRQ_0, i2s_dma_handler_0);
-        irq_set_enabled(DMA_IRQ_0, true);
-        handler_dma_channel_0 = *pChan0;
+        dma_channel_set_irq0_enabled(*pChan1, true);
 
-        dma_channel_set_irq1_enabled(*pChan1, true);
-        irq_set_exclusive_handler(DMA_IRQ_1, i2s_dma_handler_1);
-        irq_set_enabled(DMA_IRQ_1, true);
+        handler_dma_channel_0 = *pChan0;
         handler_dma_channel_1 = *pChan1;
+
+        irq_set_exclusive_handler(DMA_IRQ_0, i2s_dma_handler);
+        irq_set_enabled(DMA_IRQ_0, true);
     }
 
     // Trigger channel 0 now, it will chain to channel 1
