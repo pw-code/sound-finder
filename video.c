@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
@@ -131,6 +132,7 @@ static uint8_t ov7670_read_reg(uint8_t reg) {
 static void init_ov7670(i2c_inst_t *i2c) {
     ov7670_i2c = i2c;
     ov7670_write_reg(REG_COM7,  0b10000000); //Reset all registers to defaults
+    sleep_ms(50);
     ov7670_write_reg(REG_COM7,  0b00010100); //QVGA, RGB565
     ov7670_write_reg(REG_COM10, 0b00100100); //No PCLK when no data, vsync on falling edge of pclk
     ov7670_write_reg(REG_COM11, 0b00010000); //enable 50/60HZ detection
@@ -143,38 +145,33 @@ static void init_ov7670(i2c_inst_t *i2c) {
  * @brief select the LCD using the CS pin.
  */
 static void lcd_cs_select() {
-    sleep_us(1);
     gpio_put(PIN_LCD_CS, 0); //active low
-    sleep_us(1);
 }
 
 /**
  * @brief deselect the LCD using the CS pin.
  */
 static void lcd_cs_deselect() {
-    sleep_us(1);
     gpio_put(PIN_LCD_CS, 1); //active low
-    sleep_us(1);
 }
 
-static void lcd_write_command(uint8_t cmd) {
+static void lcd_write_commandX(uint8_t cmd, uint8_t num_data_bytes, uint8_t* data) {
     lcd_cs_select();
     gpio_put(PIN_LCD_DC, 0); // command is active low
     spi_write_blocking(lcd_spi, &cmd, 1);
     gpio_put(PIN_LCD_DC, 1);
+    if (num_data_bytes != 0) {
+        spi_write_blocking(lcd_spi, data, num_data_bytes);
+    }
     lcd_cs_deselect();
 }
 
-static void lcd_write_data(void* data, uint size) {
-    lcd_cs_select();
-    gpio_put(PIN_LCD_DC, 1);
-    spi_write_blocking(lcd_spi, data, size);
-    gpio_put(PIN_LCD_DC, 1);
-    lcd_cs_deselect();
+static void lcd_write_command1(uint8_t cmd, uint8_t data) {
+    lcd_write_commandX(cmd, 1, &data);
 }
 
-static void lcd_write_byte(uint8_t byt) {
-    lcd_write_data(&byt, 1);
+static void lcd_write_command0(uint8_t cmd) {
+    lcd_write_commandX(cmd, 0, NULL);
 }
 
 
@@ -183,58 +180,45 @@ static void init_lcd(spi_inst_t *spi) {
 
     // ILI9341 ??
 
-    lcd_write_command(0x01);//soft reset
+    lcd_write_command0(ILI9341_SWRESET);
     sleep_ms(100);
 
-    lcd_write_command(ILI9341_GAMMASET);
-    lcd_write_byte(0x01);
+    lcd_write_command1(ILI9341_GAMMASET, 0x01);
 
     // positive gamma correction
-    lcd_write_command(ILI9341_GMCTRP1);
-    lcd_write_data((uint8_t[15]){ 0x0f, 0x31, 0x2b, 0x0c, 0x0e, 0x08, 0x4e, 0xf1, 0x37, 0x07, 0x10, 0x03, 0x0e, 0x09, 0x00 }, 15);
+    lcd_write_commandX(ILI9341_GMCTRP1, 15, (uint8_t[15]){ 0x0f, 0x31, 0x2b, 0x0c, 0x0e, 0x08, 0x4e, 0xf1, 0x37, 0x07, 0x10, 0x03, 0x0e, 0x09, 0x00 });
 
     // negative gamma correction
-    lcd_write_command(ILI9341_GMCTRN1);
-    lcd_write_data((uint8_t[15]){ 0x00, 0x0e, 0x14, 0x03, 0x11, 0x07, 0x31, 0xc1, 0x48, 0x08, 0x0f, 0x0c, 0x31, 0x36, 0x0f }, 15);
+    lcd_write_commandX(ILI9341_GMCTRN1, 15, (uint8_t[15]){ 0x00, 0x0e, 0x14, 0x03, 0x11, 0x07, 0x31, 0xc1, 0x48, 0x08, 0x0f, 0x0c, 0x31, 0x36, 0x0f });
 
     // memory access control
-    lcd_write_command(ILI9341_MADCTL);
-    lcd_write_byte(0x48);
+    lcd_write_command1(ILI9341_MADCTL, 0x48);
 
     // pixel format
-    lcd_write_command(ILI9341_PIXFMT);
-    lcd_write_byte(0x55);  // 16-bit
+    lcd_write_command1(ILI9341_PIXFMT, 0x55);  // 16-bits per pixel LCD & SPI
 
     // frame rate; default, 70 Hz
-    lcd_write_command(ILI9341_FRMCTR1);
-    lcd_write_byte(0x00);
-    lcd_write_byte(0x1B);
+    lcd_write_commandX(ILI9341_FRMCTR1, 2, (uint8_t[2]){ 0x00, 0x1B });
 
     // exit sleep
-    lcd_write_command(ILI9341_SLPOUT);
+    lcd_write_command0(ILI9341_SLPOUT);
 
     // display on
-    lcd_write_command(ILI9341_DISPON);
+    lcd_write_command0(ILI9341_DISPON);
 
     //
 
-
     // column address set
-    lcd_write_command(ILI9341_CASET);
-    lcd_write_byte(0x00);
-    lcd_write_byte(0x00);  // start column
-    lcd_write_byte(0x00);
-    lcd_write_byte(0xef);  // end column -> 239
+    lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){
+        0x00, 0x00,    // start column
+        0x00, 0xef});  // end column -> 239
 
     // page address set
-    lcd_write_command(ILI9341_PASET);
-    lcd_write_byte(0x00);
-    lcd_write_byte(0x00);  // start page
-    lcd_write_byte(0x01);
-    lcd_write_byte(0x3f);  // end page -> 319
+    lcd_write_commandX(ILI9341_PASET, 4, (uint8_t[4]){
+        0x00, 0x00,    // start page
+        0x01, 0x3f});  // end page -> 319
 
-    lcd_write_command(ILI9341_RAMWR);
-   
+    lcd_write_command0(ILI9341_RAMWR);
 }
 
 //====================================================================================================
@@ -291,7 +275,11 @@ void video_init(PIO pio) {
     spi_inst_t *spi = spi0;
 
     //Initialize SPI port at 4MHz  (required to be called before other functions)
-    spi_init(spi, 4 * 1000 * 1000);
+//    spi_init(spi, 4 * 1000 * 1000);
+//    spi_init(spi, 40 * 1000 * 1000); //LCD can handle 40Mhz?!
+    spi_init(spi, 65 * 1000 * 1000); //LCD can handle 65Mhz?! 
+
+    //spi_set_format(spi, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
 
     // Assign SPI hardware pins
     gpio_set_function(PIN_SPI_SCK, GPIO_FUNC_SPI);
@@ -317,16 +305,106 @@ void video_init(PIO pio) {
     //TODO: init_sd_card();
 }
 
+static void lcd_reg_diag(const char * name, uint8_t cmd, uint8_t num_returned_params) {
+    uint8_t bytes[num_returned_params];
+
+    printf("%02x %s = ", cmd, name);
+
+    lcd_cs_select();
+    gpio_put(PIN_LCD_DC, 0); // command is active low
+    spi_write_blocking(lcd_spi, &cmd, 1);
+    gpio_put(PIN_LCD_DC, 1);
+    spi_read_blocking(lcd_spi, 0xff, bytes, num_returned_params);
+    lcd_cs_deselect();
+
+    //skip param 1 - it is always junk
+    for (uint i = 1; i < num_returned_params; ++i) {
+        printf(" %02x", bytes[i]);
+    }
+    printf("\n");
+}
 
 // Continuously stream the OV7670 data to the SPI TFT-LCD display
 // We add data overlays as we go.
 // It does not matter that DMA is overwriting data as we go, as video pixels are mostly the same each frame (a bit of tearing may occur)
 void video_stream() {
+
+    //DEBUG
+    //wait for someone to be monitoring USB serial
+    while (getchar() == EOF) {
+        tight_loop_contents();
+    }
+    printf("CONNECTED\n");
+
+    lcd_reg_diag("ILI9341_RDDID", 0x04, 4);
+    lcd_reg_diag("ILI9341_RDDST", 0x09, 5);
+    lcd_reg_diag("ILI9341_RDDPM", 0x0A, 2);
+    lcd_reg_diag("ILI9341_RDDMADCTL", 0x0B, 2);
+    lcd_reg_diag("ILI9341_RDDCOLMOD", 0x0C, 2);
+    lcd_reg_diag("ILI9341_RDDIM", 0x0D, 2);
+    lcd_reg_diag("ILI9341_RDDSM", 0x0E, 2);
+    lcd_reg_diag("ILI9341_RDDSDR", 0x0F, 2);
+    lcd_reg_diag("ILI9341_RDDSDR", 0x0F, 2);
+
+    // lcd_reg_diag("ILI9488_RDSELFDIAG", 0x0F, 1);
+    // lcd_reg_diag("ILI9488_DFUNCTR", 0xb6, 5);
+    // lcd_reg_diag("ILI9488_PWCTR1", 0xC0, 3);
+    // lcd_reg_diag("ILI9488_VMCTR1", 0xC5, 3);
+    // lcd_reg_diag("ILI9488_VMCTR2", 0xC7, 2);
+    // lcd_reg_diag("NVM Stats    ", 0xD2, 3);
+    // lcd_reg_diag("ID4          ", 0xD3, 4);
+    // lcd_reg_diag("ILI9488_RDID1", 0xDA, 2);
+    // lcd_reg_diag("ILI9488_RDID2", 0xDB, 2);
+    // lcd_reg_diag("ILI9488_RDID3", 0xDC, 2);
+    // lcd_reg_diag("GAMMAP       ", 0xE0, 16);
+    // lcd_reg_diag("GAMMAN       ", 0xE1, 16);
+    // lcd_reg_diag("INTERFACE    ", 0xf6, 4);
+
+    uint8_t colour[2];
+    // colour=0x0000; //WHITE?
+    // colour=0xFFFF; //BLACK?
+
+    //RED
+    colour[0]=0xF8; colour[1]=0x00; 
+    lcd_write_command0(ILI9341_RAMWR);
+    lcd_cs_select();
+    for(uint i=0; i<(320*240); ++i) {
+        spi_write_blocking(lcd_spi, colour, 2);
+    }
+    lcd_cs_deselect();
+    sleep_ms(2000);
+
+    //GREEN
+    colour[0]=0x07; colour[1]=0xE0; 
+    lcd_write_command0(ILI9341_RAMWR);
+    lcd_cs_select();
+    for(uint i=0; i<(320*240); ++i) {
+        spi_write_blocking(lcd_spi, colour, 2);
+    }
+    lcd_cs_deselect();
+    sleep_ms(2000);
+
+    //BLUE
+    colour[0]=0x00; colour[1]=0x3F; 
+    lcd_write_command0(ILI9341_RAMWR);
+    lcd_cs_select();
+    for(uint i=0; i<(320*240); ++i) {
+        spi_write_blocking(lcd_spi, colour, 2);
+    }
+    lcd_cs_deselect();
+    sleep_ms(2000);
+
+    //lcd_reg_diag("ID4          ", 0xD3, 4);
+    while (getchar() == EOF) {
+        tight_loop_contents();
+    }
+    printf("RUN\n");
+
     while (true) {
 
         // Grab copy of latest row - then send it
 
-        // Wait for either of the vide IRQ DMA's to trigger (should happen pretty soon at 30fps)
+        // Wait for either of the video DMA IRQs to trigger (should happen pretty soon at 30fps)
         while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) == 0) {
             tight_loop_contents();
         }
@@ -334,33 +412,32 @@ void video_stream() {
         while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) != 0) {
             tight_loop_contents();
         }
-        // grab
-        memcpy(video_buffer_lcd, &video_buffer[last_video_buf], sizeof(video_buffer_lcd));
+        // grab a copy -- because the SPI transfer is slow and so the dma buffer would get overwritten while we write
+        memcpy(video_buffer_lcd, video_buffer[last_video_buf], sizeof(video_buffer_lcd));
 
         //restrict output to this row, then stream bytes to fill it
         //the LCD is rotated (240x320) so we actually fill a 320 high column, 1 row
         uint16_t row = video_buffer_lcd[0];
+        //DEBUG
+        printf("ROW %u\n", row);
 
         // column address set
-        lcd_write_command(ILI9341_CASET);
-        lcd_write_byte(0x00);
-        lcd_write_byte(row);  // start column
-        lcd_write_byte(0x00);
-        lcd_write_byte(row);  // end column -> 239
+        lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){
+            (row >> 8) & 0xFF, row & 0xFF,    // start column
+            (row >> 8) & 0xFF, row & 0xFF});  // end column
 
         // page address set
-        lcd_write_command(ILI9341_PASET);
-        lcd_write_byte(0x00);
-        lcd_write_byte(0x00);  // start page
-        lcd_write_byte(0x01);
-        lcd_write_byte(0x3f);  // end page -> 319
+        lcd_write_commandX(ILI9341_PASET, 4, (uint8_t[4]){
+            0x00, 0x00,    // start page
+            0x01, 0x3f});  // end page -> 319
 
-        lcd_write_command(ILI9341_RAMWR);
-
-        for (uint x=0; x<VIDEO_COLUMNS; ++x) {
-            uint16_t rgb565 = video_buffer_lcd[x+1];
-            lcd_write_data(&rgb565, 2); //TODO translate little/big endian?
-        }
-
+        lcd_write_command0(ILI9341_RAMWR);
+        lcd_cs_select();
+        spi_write_blocking(lcd_spi, (uint8_t*)(&video_buffer_lcd[1]), 2*VIDEO_COLUMNS); //TODO translate little/big endian?
+        lcd_cs_deselect();
+        // for (uint x=0; x<VIDEO_COLUMNS; ++x) {
+        //     uint16_t rgb565 = video_buffer_lcd[x+1];
+        //     lcd_write_data(&rgb565, 2); //TODO translate little/big endian?
+        // }
     }
 }

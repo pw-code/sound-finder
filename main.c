@@ -45,7 +45,7 @@ int main() {
 
 
     //stdio_init_all();
-    stdio_usb_init(); //use use UART pins for other tasks, so we can only log via USB
+    stdio_usb_init(); // We use UART pins for other tasks, so we can only log via USB
 
 
     // PIO 0 setup for i2s capture

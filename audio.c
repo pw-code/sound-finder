@@ -142,6 +142,8 @@ void audio_dma_init(PIO pio) {
 
 static void analyse_capture(uint buffer_num) {
 
+#undef DEBUG_DUMP_AUDIO
+#ifdef DEBUG_DUMP_AUDIO
     // dump capture buffer 0, left channel, as hex
     printf("CAPTURE %d: %d samples\n", capture_count, AUDIO_CHANNEL_BUF_LEN);
     //fflush(stdout);
@@ -176,6 +178,7 @@ static void analyse_capture(uint buffer_num) {
     buf[p] = 0;
     fputs(buf, stdout);
     //fflush(stdout);
+#endif
 }
 
 
@@ -187,12 +190,12 @@ void audio_capture_analyse() {
     // wait for alternate DMA buffers to fill, and then process each
 
     dma_channel_wait_for_finish_blocking(dma_chan0_0);
-    gpio_put(PIN_LED, 1);
+    //gpio_put(PIN_LED, 1);
     analyse_capture(0);
-    gpio_put(PIN_LED, 0);
+    //gpio_put(PIN_LED, 0);
 
     dma_channel_wait_for_finish_blocking(dma_chan0_1);
-    gpio_put(PIN_LED, 1);
+    //gpio_put(PIN_LED, 1);
     analyse_capture(1);
-    gpio_put(PIN_LED, 0);
+    //gpio_put(PIN_LED, 0);
 }
