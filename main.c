@@ -47,6 +47,13 @@ int main() {
     //stdio_init_all();
     stdio_usb_init(); // We use UART pins for other tasks, so we can only log via USB
 
+    //DEBUG
+    //wait for someone to be monitoring USB serial
+    // while (getchar() == EOF) {
+    //     tight_loop_contents();
+    // }
+    // printf("CONNECTED\n");
+
 
     // PIO 0 setup for i2s capture
     audio_dma_init(pio0);

@@ -14,6 +14,7 @@
 
 .wrap_target
     wait 1 GPIO pio_vsync_pin   ; wait for vsync
+    wait 0 GPIO pio_vsync_pin
 have_vsync:
     mov y, OSR                  ; row, reading backwards, LCD update can invert it
 
@@ -50,6 +51,8 @@ pixel_read_320:
     push block
 
     jmp x-- pixel_read_320      ; Read 1 whole line
+
+    wait 0 GPIO pio_href_pin    ; Wait for HREF to signal end of row
 
     jmp y-- wait_line           ; end of row?
 
