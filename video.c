@@ -87,7 +87,7 @@ static void init_pixel_dma(PIO pio) {
     channel_config_set_chain_to(&cfg0, dma_pixel_chan_1); //chain to 1
     dma_channel_configure(dma_pixel_chan_0, &cfg0,
         video_buffer[0],        // Destination pointer
-        &pio->rxf[sm_ov7670],   // Source pointer
+        &pio->rxf[sm_ov7670],   // Source pointer, lower 16bits of the RX FIFO
         1 + VIDEO_COLUMNS,      // Number of transfers
         false                   // Start later
     );
@@ -100,7 +100,7 @@ static void init_pixel_dma(PIO pio) {
     channel_config_set_chain_to(&cfg1, dma_pixel_chan_0); //back to 0
     dma_channel_configure(dma_pixel_chan_1, &cfg1,
         video_buffer[1],        // Destination pointer
-        &pio->rxf[sm_ov7670],   // Source pointer
+        &pio->rxf[sm_ov7670],   // Source pointer, lower 16bits of the RX FIFO
         1 + VIDEO_COLUMNS,      // Number of transfers
         false                   // Start later
     );
@@ -202,6 +202,7 @@ static void init_lcd(spi_inst_t *spi) {
 
     // exit sleep
     lcd_write_command0(ILI9341_SLPOUT);
+    sleep_ms(120);
 
     // display on
     lcd_write_command0(ILI9341_DISPON);
@@ -251,7 +252,7 @@ void video_init(PIO pio) {
     gpio_set_dir(PIN_OV7670_PCLK, GPIO_IN);
 
     // Load OV7670 pixel loader
-    ov7670_program_load(pio, PIN_OV7670_PCLK, PIN_OV7670_D0);
+    ov7670_program_load(pio, PIN_OV7670_VSYNC, PIN_OV7670_D0);
 
 
     // Map I2C0 to GPIO pins 20 & 21 */
@@ -313,8 +314,8 @@ static void lcd_reg_diag(const char * name, uint8_t cmd, uint8_t num_returned_pa
     lcd_cs_select();
     gpio_put(PIN_LCD_DC, 0); // command is active low
     spi_write_blocking(lcd_spi, &cmd, 1);
-    gpio_put(PIN_LCD_DC, 1);
     spi_read_blocking(lcd_spi, 0xff, bytes, num_returned_params);
+    gpio_put(PIN_LCD_DC, 1);
     lcd_cs_deselect();
 
     //skip param 1 - it is always junk
@@ -372,7 +373,7 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(2000);
+    sleep_ms(200);
 
     //GREEN
     colour[0]=0x07; colour[1]=0xE0; 
@@ -382,7 +383,7 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(2000);
+    sleep_ms(200);
 
     //BLUE
     colour[0]=0x00; colour[1]=0x3F; 
@@ -392,13 +393,17 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(2000);
+    sleep_ms(200);
 
-    //lcd_reg_diag("ID4          ", 0xD3, 4);
-    while (getchar() == EOF) {
-        tight_loop_contents();
-    }
-    printf("RUN\n");
+    // while (getchar() == EOF) {
+    //     tight_loop_contents();
+    // }
+    // printf("RUN\n");
+
+    // while (true) {
+    //     printf("%d x%x\tx%x\n", last_video_buf, video_buffer[0][0], video_buffer[1][0]);
+    //     sleep_ms(91);
+    // }
 
     while (true) {
 
@@ -419,7 +424,15 @@ void video_stream() {
         //the LCD is rotated (240x320) so we actually fill a 320 high column, 1 row
         uint16_t row = video_buffer_lcd[0];
         //DEBUG
-        printf("ROW %u\n", row);
+        //printf("ROW %u\n", row);
+        {//if (row == 1) {
+            // printf("%d %u:%02x\t", last_video_buf, row, row);
+            // for (uint i=1; i<VIDEO_COLUMNS+1; ++i) {
+            //     printf(" %04x", video_buffer_lcd[i]);
+            // }
+            // printf("\n");
+            // sleep_ms(791);
+        }
 
         // column address set
         lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){

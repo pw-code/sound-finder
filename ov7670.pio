@@ -9,62 +9,51 @@
 .define public pio_vsync_pin 14
 .define public pio_pclk_pin  15
 
+    pull                        ; OSR set at startup to 239 (num rows)
+                                ; Nothing else should touch OSR, so we can keep using it
 
 .wrap_target
     wait 1 GPIO pio_vsync_pin   ; wait for vsync
-    set y, 0                    ; row
-    
-wait_line:                      ; count hsync lines
-    wait 1 GPIO pio_href_pin
+have_vsync:
+    mov y, OSR                  ; row, reading backwards, LCD update can invert it
 
+wait_line:
     in y, 16                    ; first 16 bits of each row are the row number
-    push
+    push block
 
-    ; we want to read 320 pixels, but only have 1 byte
-    ; so we read 160 Pairs of pixels instead
-
-    ; cannot set x directly, so abuse the ISR to buffer 2 nibbles (160 == 0x9F)
-    set x, 0x09
-    in x, 8
+    ; we want to read 320 pixels
+    ; cannot set x directly, so abuse the ISR to buffer 3 nibbles (319 == 0x13F)
+    mov isr, null
+    set x, 0x01
+    in x, 4
+    set x, 0x03
+    in x, 4
     set x, 0x0F
-    in x, 8
+    in x, 4
     mov x, isr
 
-    ; X is now 159, ISR is empty
+    ; X is now 319
 
-pixel_read_160:
+    wait 1 GPIO pio_href_pin     ; Wait for HREF to signal data is starting
 
+pixel_read_320:
     ; Get a pixel (16 bits)
+
     wait 1 GPIO pio_pclk_pin
     in pins, 8                  ; 8 parallel pin bits
-    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel clock
+
     wait 1 GPIO pio_pclk_pin
     in pins, 8                  ; 8 parallel pin bits
-    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
-    push
+    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel clock
 
-    ; Get a pixel (16 bits)
-    wait 1 GPIO pio_pclk_pin
-    in pins, 8                  ; 8 parallel pin bits
-    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
-    wait 1 GPIO pio_pclk_pin
-    in pins, 8                  ; 8 parallel pin bits
-    wait 0 GPIO pio_pclk_pin    ; wait for end of pixel
-    push
+    push block
 
-    jmp x-- pixel_read_160      ; read 2x160 = 320 pixels
+    jmp x-- pixel_read_320      ; Read 1 whole line
 
-    ; end of row
-    ; we are counting UP the row, and want to stop and reset at 230
-    ; cannot set x directly, so abuse the ISR to buffer 2 nibbles (239 == 0xEF)
-    set x, 0x0E
-    in x, 8
-    set x, 0x0F
-    in x, 8
-    mov x, isr
+    jmp y-- wait_line           ; end of row?
 
-    jmp x!=y wait_line          ; next line in frame
-
+    ; end of frame
 .wrap
 
 
@@ -74,7 +63,7 @@ pixel_read_160:
 // Which state machine for which function?
 const int sm_ov7670 = 0;
 
-static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_base) {
+static inline void ov7670_program_load(PIO pio, uint pin_vsync, uint pin_data_base) {
 
     uint offset = pio_add_program(pio, &ov7670_program);
     pio_sm_config cfg = ov7670_program_get_default_config(offset);
@@ -85,10 +74,10 @@ static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_bas
     sm_config_set_clkdiv(&cfg, 1);
 
     sm_config_set_in_pins(&cfg, pin_data_base);
-    sm_config_set_jmp_pin(&cfg, pin_pclk);
+    sm_config_set_jmp_pin(&cfg, pin_vsync);
 
     // Set the pin's GPIO function (connect PIO to the pad)
-    pio_gpio_init(pio, pin_pclk);
+    pio_gpio_init(pio, pin_vsync);
     for (uint i=0; i<8; ++i) {
         pio_gpio_init(pio, pin_data_base+i);
     }
@@ -102,6 +91,11 @@ static inline void ov7670_program_load(PIO pio, uint pin_pclk, uint pin_data_bas
     // Configure and start
     pio_sm_init(pio, sm_ov7670, offset, &cfg);
     pio_sm_clear_fifos(pio, sm_ov7670);
+
+    //populate OSR for program to use (set value for max Rows)
+    pio_sm_put_blocking(pio, sm_ov7670, 239);
+
+    //start
     pio_sm_set_enabled(pio, sm_ov7670, true);
 }
 
