@@ -59,6 +59,7 @@ typedef struct {
 static const OV7670_command
     OV7670_init[] = {
         // Initialisation sequences from Adafruit: https://github.com/adafruit/Adafruit_OV7670/blob/master/src/ov7670.c
+        {OV7670_REG_COM7, OV7670_COM7_RESET},
 
         // Manual output format, RGB, use RGB565 and full 0-255 output range
         {OV7670_REG_COM7, OV7670_COM7_SIZE_VGA | OV7670_COM7_RGB},
@@ -85,7 +86,7 @@ static const OV7670_command
         {OV7670_REG_GAM_BASE + 13, 0xD7},
         {OV7670_REG_GAM_BASE + 14, 0xE8},
 
-        //{OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_BANDING},
+        {OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_BANDING},
         {OV7670_REG_GAIN, 0x00},
         {OV7670_COM2_SSLEEP, 0x00},
         {OV7670_REG_COM4, 0x00},
@@ -182,12 +183,20 @@ static const OV7670_command
 		{OV7670_REG_VREF,   0x0a},
 
         // Colour balance
-        // {OV7670_REG_GAIN, 0xFF},
-        // {OV7670_REG_RED, 0x60},
-        // {OV7670_REG_BLUE, 0xF0},
-        // {OV7670_REG_GGAIN, 0xF0},
+        {OV7670_REG_GAIN, 0x00},
+        {OV7670_REG_RED, 0x80},
+        {OV7670_REG_BLUE, 0x80},
+        {OV7670_REG_GGAIN, 0x80},
 
-        {OV7670_REG_EDGE, 0x01}, //Edge enhancement factor 
+        //{OV7670_REG_GFIX, 0x5D},
+        //{OV7670_REG_REG74, 0x19},
+        {OV7670_REG_GFIX, 0b11111011}, //00=1x, 01=1.25x, 10=1.5x, 11=1.75x; channels 2 bits each: Gr, Gb, R, B
+        //{OV7670_REG_REG74, 0x1D},
+        //{OV7670_REG_COM13, 0xA0},   //saturation control?
+
+        {OV7670_REG_EDGE, 0x03}, //Edge enhancement factor 
+
+        {OV7670_REG_COM11, 0xFF}, //night mode all options on : automatic
 
 #undef OV7670_SHOW_TEST_PATTERN
 #ifdef OV7670_SHOW_TEST_PATTERN
@@ -207,7 +216,10 @@ static const OV7670_command
         {OV7670_REG_SCALING_YSC, 0},
 #endif
 
-        {OV7670_REG_CLKRC, 0b10000000}, //double clock
+        //{OV7670_REG_CLKRC, 0b10000000}, //double clock
+        //half and then double the pclk. This seems to tidy up the data quality
+        // {OV7670_REG_CLKRC, 0x1},
+        // {OV7670_REG_DBLV, 0x4A},
 
         {0xFF, 0xFF},       // End-of-data marker
 };
@@ -294,11 +306,6 @@ static uint8_t ov7670_read_reg(uint8_t reg) {
 
 static void init_ov7670(i2c_inst_t *i2c) {
     ov7670_i2c = i2c;
-    sleep_ms(50);  //needs time to stabilise after master clock starts??
-
-    ov7670_write_reg(OV7670_REG_COM7, OV7670_COM7_RESET); //Reset all registers to defaults
-    sleep_ms(50); //todo: do we need reset time?
-
     const OV7670_command *cmd = OV7670_init;
     while (cmd->reg != 0xFF) {
         ov7670_write_reg(cmd->reg, cmd->value);
@@ -537,7 +544,7 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(200);
+    sleep_ms(20);
 
     //GREEN
     colour[0]=0x07; colour[1]=0xE0; 
@@ -547,7 +554,7 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(200);
+    sleep_ms(20);
 
     //BLUE
     colour[0]=0x00; colour[1]=0x3F; 
@@ -557,7 +564,7 @@ void video_stream() {
         spi_write_blocking(lcd_spi, colour, 2);
     }
     lcd_cs_deselect();
-    sleep_ms(200);
+    sleep_ms(20);
 
     // while (getchar() == EOF) {
     //     tight_loop_contents();
