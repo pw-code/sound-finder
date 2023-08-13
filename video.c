@@ -49,26 +49,16 @@ i2c_inst_t *ov7670_i2c;
 spi_inst_t *lcd_spi;
 
 
-// Initialisation sequences from Adafruit: https://github.com/adafruit/Adafruit_OV7670/blob/master/src/ov7670.c
-/** Address/value combo for OV7670 camera commands. */
+// OV7670 Initialisation sequence
+
 typedef struct {
   uint8_t reg;   ///< Register address
   uint8_t value; ///< Value to store
 } OV7670_command;
+
 static const OV7670_command
     OV7670_init[] = {
-        // {OV7670_REG_COM3, OV7670_COM3_SCALEEN}, //enable scaling
-        // //{OV7670_REG_COM7, OV7670_COM7_SIZE_QVGA | OV7670_COM7_RGB},
-        // {OV7670_REG_COM7, OV7670_COM7_SIZE_VGA | OV7670_COM7_RGB},
-        // {OV7670_REG_RGB444, 0},
-        // {OV7670_REG_COM15, OV7670_COM15_RGB565 | OV7670_COM15_R00FF}, // Full 0-255 output range
-
-        // {OV7670_REG_HSTART, 0x16 },
-        // {OV7670_REG_HSTOP, 0x04 },
-        // {OV7670_REG_HREF, 0xa4 },
-        // {OV7670_REG_VSTART, 0x02 },
-        // {OV7670_REG_VSTOP, 0x7a },
-        // {OV7670_REG_VREF, 0x0a },
+        // Initialisation sequences from Adafruit: https://github.com/adafruit/Adafruit_OV7670/blob/master/src/ov7670.c
 
         // Manual output format, RGB, use RGB565 and full 0-255 output range
         {OV7670_REG_COM7, OV7670_COM7_SIZE_VGA | OV7670_COM7_RGB},
@@ -95,7 +85,7 @@ static const OV7670_command
         {OV7670_REG_GAM_BASE + 13, 0xD7},
         {OV7670_REG_GAM_BASE + 14, 0xE8},
 
-        {OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_BANDING},
+        //{OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_BANDING},
         {OV7670_REG_GAIN, 0x00},
         {OV7670_COM2_SSLEEP, 0x00},
         {OV7670_REG_COM4, 0x00},
@@ -177,27 +167,49 @@ static const OV7670_command
         {OV7670_REG_CONTRAS, 0x40},
         {OV7670_REG_CONTRAS_CENTER, 0x80}, // 0x40?
 
+
         //Switch to QVGA RGB565
-        //https://github.com/ComputerNerd/ov7670-simple/blob/master/main.c
+        //From https://github.com/ComputerNerd/ov7670-simple/blob/master/main.c
     	{OV7670_REG_COM3,4},	// REG_COM3 
         {OV7670_REG_COM14, 0x19},
 		{0x72, 0x11},
 		{0x73, 0xf1},
-		{OV7670_REG_HSTART,0x16},
-		{OV7670_REG_HSTOP,0x04},
-		{OV7670_REG_HREF,0x24},		
-		{OV7670_REG_VSTART,0x02},
-		{OV7670_REG_VSTOP,0x7a},
-		{OV7670_REG_VREF,0x0a},
-        // {OV7670_REG_COM3, OV7670_COM3_SCALEEN}, //enable scaling
-        // {OV7670_REG_HSTART, 0x16 },
-        // {OV7670_REG_HSTOP, 0x04 },
-        // {OV7670_REG_HREF, 0xa4 },
-        // {OV7670_REG_VSTART, 0x02 },
-        // {OV7670_REG_VSTOP, 0x7a },
-        // {OV7670_REG_VREF, 0x0a },
+		{OV7670_REG_HSTART, 0x15},
+		{OV7670_REG_HSTOP,  0x01},
+		{OV7670_REG_HREF,   0x24},		
+		{OV7670_REG_VSTART, 0x02},
+		{OV7670_REG_VSTOP,  0x7a},
+		{OV7670_REG_VREF,   0x0a},
 
-        {OV7670_REG_LAST + 1, 0x00},       // End-of-data marker
+        // Colour balance
+        // {OV7670_REG_GAIN, 0xFF},
+        // {OV7670_REG_RED, 0x60},
+        // {OV7670_REG_BLUE, 0xF0},
+        // {OV7670_REG_GGAIN, 0xF0},
+
+        {OV7670_REG_EDGE, 0x01}, //Edge enhancement factor 
+
+#undef OV7670_SHOW_TEST_PATTERN
+#ifdef OV7670_SHOW_TEST_PATTERN
+        // Colour bars
+        // {OV7670_REG_SCALING_XSC, 0x3A}, // Enable pattern
+        // {OV7670_REG_SCALING_YSC, 0x35 | 0x80}, // Enable pattern
+        {OV7670_REG_SCALING_XSC, 0x00}, // Enable pattern
+        {OV7670_REG_SCALING_YSC, 0x80}, // Enable pattern
+        // Shifting 1
+        // {OV7670_REG_SCALING_XSC, 0x80}, // Enable pattern
+        // {OV7670_REG_SCALING_YSC, 0x00}, // Enable pattern
+        // Fade to grey
+        // {OV7670_REG_SCALING_XSC, 0x80}, // Enable pattern
+        // {OV7670_REG_SCALING_YSC, 0x80}, // Enable pattern
+#else
+        {OV7670_REG_SCALING_XSC, 0},
+        {OV7670_REG_SCALING_YSC, 0},
+#endif
+
+        {OV7670_REG_CLKRC, 0b10000000}, //double clock
+
+        {0xFF, 0xFF},       // End-of-data marker
 };
 
 //====================================================================================================
@@ -288,7 +300,7 @@ static void init_ov7670(i2c_inst_t *i2c) {
     sleep_ms(50); //todo: do we need reset time?
 
     const OV7670_command *cmd = OV7670_init;
-    while (cmd->reg <= OV7670_REG_LAST) {
+    while (cmd->reg != 0xFF) {
         ov7670_write_reg(cmd->reg, cmd->value);
         cmd++;
     }
@@ -310,7 +322,7 @@ static void lcd_cs_deselect() {
     gpio_put(PIN_LCD_CS, 1); //active low
 }
 
-static void lcd_write_commandX(uint8_t cmd, uint8_t num_data_bytes, uint8_t* data) {
+static void lcd_write_commandX(uint8_t cmd, size_t num_data_bytes, uint8_t* data) {
     lcd_cs_select();
     gpio_put(PIN_LCD_DC, 0); // command is active low
     spi_write_blocking(lcd_spi, &cmd, 1);
@@ -347,7 +359,9 @@ static void init_lcd(spi_inst_t *spi) {
     lcd_write_commandX(ILI9341_GMCTRN1, 15, (uint8_t[15]){ 0x00, 0x0e, 0x14, 0x03, 0x11, 0x07, 0x31, 0xc1, 0x48, 0x08, 0x0f, 0x0c, 0x31, 0x36, 0x0f });
 
     // memory access control
-    lcd_write_command1(ILI9341_MADCTL, 0x48);
+    //lcd_write_command1(ILI9341_MADCTL, 0x48);
+    //lcd_write_command1(ILI9341_MADCTL, 0x40); //top-to-bottom, RGB
+    lcd_write_command1(ILI9341_MADCTL, 0b11000000); //top-to-bottom, right-to-left, RGB
 
     // pixel format
     lcd_write_command1(ILI9341_PIXFMT, 0x55);  // 16-bits per pixel LCD & SPI
@@ -390,8 +404,8 @@ void video_init(PIO pio) {
     gpio_set_function(PIN_OV7670_XCLK, GPIO_FUNC_PWM);
     uint pwm_slice = pwm_gpio_to_slice_num(PIN_OV7670_XCLK);
     uint pwm_chan = pwm_gpio_to_channel(PIN_OV7670_XCLK);
-    //    const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000);
-    const float div = (float)clock_get_hz(clk_sys) / (8 * 1000 * 1000); //DEBUG 8Mhz so logic analyser can see it better
+    //const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000);
+    const float div = (float)clock_get_hz(clk_sys) / (12 * 1000 * 1000);
     pwm_set_clkdiv(pwm_slice, div/2);
     // Set period of 2 cycles 
     pwm_set_wrap(pwm_slice, 1);
@@ -568,7 +582,7 @@ void video_stream() {
             tight_loop_contents();
         }
         // grab a copy -- because the SPI transfer is slower and so the DMA buffer could get overwritten while we write
-#undef SWAP_VIDEO_DATA_ENDIANNESS
+#define SWAP_VIDEO_DATA_ENDIANNESS
 #ifdef SWAP_VIDEO_DATA_ENDIANNESS
         video_buffer_lcd[0] = video_buffer[last_video_buf][0]; //row
         for (uint i=1; i<=VIDEO_COLUMNS; ++i) {
@@ -578,24 +592,20 @@ void video_stream() {
 #else
         memcpy(video_buffer_lcd, video_buffer[last_video_buf], sizeof(video_buffer_lcd));
 #endif
-        //DEBUG only keep 5 bits of red channel
-        for (uint i=1; i<=VIDEO_COLUMNS; ++i) {
-            video_buffer_lcd[i] &= 0xF8;
-        }
 
         //restrict output to this row, then stream bytes to fill it
         //the LCD is rotated (240x320) so we actually fill a 320 high column, 1 row
         uint16_t row = video_buffer_lcd[0];
         //DEBUG
         //printf("ROW %u\n", row);
-        {//if (row == 1) {
-            // printf("%d %u:%02x\t", last_video_buf, row, row);
-            // for (uint i=1; i<VIDEO_COLUMNS+1; ++i) {
-            //     printf(" %04x", video_buffer_lcd[i]);
-            // }
-            // printf("\n");
-            // sleep_ms(791);
-        }
+        // {//if (row == 1) {
+        //     printf("%d %u:%02x\t", last_video_buf, row, row);
+        //     for (uint i=1; i<VIDEO_COLUMNS+1; ++i) {
+        //         printf(" %04x", video_buffer_lcd[i]);
+        //     }
+        //     printf("\n");
+        //     sleep_ms(791);
+        // }
 
         // column address set
         lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){
@@ -607,13 +617,7 @@ void video_stream() {
             0x00, 0x00,    // start page
             0x01, 0x3f});  // end page -> 319
 
-        lcd_write_command0(ILI9341_RAMWR);
-        lcd_cs_select();
-        spi_write_blocking(lcd_spi, (uint8_t*)(&video_buffer_lcd[1]), 2*VIDEO_COLUMNS); //TODO translate little/big endian?
-        lcd_cs_deselect();
-        // for (uint x=0; x<VIDEO_COLUMNS; ++x) {
-        //     uint16_t rgb565 = video_buffer_lcd[x+1];
-        //     lcd_write_data(&rgb565, 2); //TODO translate little/big endian?
-        // }
+        // pixel data
+        lcd_write_commandX(ILI9341_RAMWR, 2*VIDEO_COLUMNS, (uint8_t*)(&video_buffer_lcd[1]));
     }
 }
