@@ -37,7 +37,7 @@
 // which are populated with whole rows from the PIO program.
 // Each row starts with 16bits holding the row number, then Columns*16bits of pixel data.
 uint16_t video_buffer[2][1 + VIDEO_COLUMNS];
-uint16_t video_buffer_lcd[1 + VIDEO_COLUMNS];
+uint16_t video_buffer_lcd[VIDEO_COLUMNS];
 _Atomic uint8_t last_video_buf;
 
 PIO ov7670_pio;
@@ -176,8 +176,8 @@ static const OV7670_command
 		{0x72, 0x11},
 		{0x73, 0xf1},
 		{OV7670_REG_HSTART, 0x15},
-		{OV7670_REG_HSTOP,  0x01},
-		{OV7670_REG_HREF,   0x24},		
+		{OV7670_REG_HSTOP,  0x03},
+		{OV7670_REG_HREF,   0x3F},		
 		{OV7670_REG_VSTART, 0x02},
 		{OV7670_REG_VSTOP,  0x7a},
 		{OV7670_REG_VREF,   0x0a},
@@ -494,6 +494,34 @@ static void lcd_reg_diag(const char * name, uint8_t cmd, uint8_t num_returned_pa
     printf("\n");
 }
 
+static void plot_audio_marker(uint16_t row, int16_t marker_x, int16_t marker_y) {
+
+    // Draw a square around the given spot
+    const int16_t square_size = 15;
+
+    for (int y = marker_y - square_size; y < marker_y + square_size; ++y) {
+        if (y == row) {
+            for (int x = marker_x - square_size; x < marker_x + square_size; ++x) {
+                if (x >= 0 && x < VIDEO_COLUMNS) {
+                    //replace RED (endianness means it's in the middle 5 bits)
+                    // rrrrrggggggbbbbb =>  gggbbbbbrrrrrggg
+                    //                    0b1110011100000001 
+                    //also remove the top 2 bits of G & B too (fade away)
+                    video_buffer_lcd[x] = (video_buffer_lcd[x] & 0b1110011100000001) | 0b0000000011111000;
+                }
+            }
+        }
+    }
+}
+
+static void plot_audio_markers(uint16_t row) {
+    //TODO: get from audio module sound intensity data
+    plot_audio_marker(row, 160, 100);
+    plot_audio_marker(row, 315, 10);
+    plot_audio_marker(row, 5, 235);
+}
+
+
 // Continuously stream the OV7670 data to the SPI TFT-LCD display
 // We add data overlays as we go.
 // It does not matter that DMA is overwriting data as we go, as video pixels are mostly the same each frame (a bit of tearing may occur)
@@ -526,50 +554,6 @@ void video_stream() {
     printf("OV7670 PID %02x\n", ov7670_read_reg(OV7670_REG_PID));
     printf("OV7670 VER %02x\n", ov7670_read_reg(OV7670_REG_VER));
 
-    uint8_t colour[2];
-    // colour=0x0000; //WHITE?
-    // colour=0xFFFF; //BLACK?
-
-    //RED
-    colour[0]=0xF8; colour[1]=0x00; 
-    lcd_write_command0(ILI9341_RAMWR);
-    lcd_cs_select();
-    for(uint i=0; i<(320*240); ++i) {
-        spi_write_blocking(lcd_spi, colour, 2);
-    }
-    lcd_cs_deselect();
-    sleep_ms(20);
-
-    //GREEN
-    colour[0]=0x07; colour[1]=0xE0; 
-    lcd_write_command0(ILI9341_RAMWR);
-    lcd_cs_select();
-    for(uint i=0; i<(320*240); ++i) {
-        spi_write_blocking(lcd_spi, colour, 2);
-    }
-    lcd_cs_deselect();
-    sleep_ms(20);
-
-    //BLUE
-    colour[0]=0x00; colour[1]=0x3F; 
-    lcd_write_command0(ILI9341_RAMWR);
-    lcd_cs_select();
-    for(uint i=0; i<(320*240); ++i) {
-        spi_write_blocking(lcd_spi, colour, 2);
-    }
-    lcd_cs_deselect();
-    sleep_ms(20);
-
-    // while (getchar() == EOF) {
-    //     tight_loop_contents();
-    // }
-    // printf("RUN\n");
-
-    // while (true) {
-    //     printf("%d x%x\tx%x\n", last_video_buf, video_buffer[0][0], video_buffer[1][0]);
-    //     sleep_ms(91);
-    // }
-
     while (true) {
 
         // Grab copy of latest row - then send it
@@ -583,20 +567,16 @@ void video_stream() {
             tight_loop_contents();
         }
         // grab a copy -- because the SPI transfer is slower and so the DMA buffer could get overwritten while we write
-#define SWAP_VIDEO_DATA_ENDIANNESS
-#ifdef SWAP_VIDEO_DATA_ENDIANNESS
-        video_buffer_lcd[0] = video_buffer[last_video_buf][0]; //row
-        for (uint i=1; i<=VIDEO_COLUMNS; ++i) {
-            uint16_t tmp = video_buffer[last_video_buf][i];
+        // swap data endianness as we go (PICO and OV7670 are opposite)
+        uint16_t row = video_buffer[last_video_buf][0];
+        for (uint i=0; i<VIDEO_COLUMNS; ++i) {
+            uint16_t tmp = video_buffer[last_video_buf][i+1];
             video_buffer_lcd[i] = (tmp >> 8) | (tmp << 8);
         }
-#else
-        memcpy(video_buffer_lcd, video_buffer[last_video_buf], sizeof(video_buffer_lcd));
-#endif
 
-        //restrict output to this row, then stream bytes to fill it
-        //the LCD is rotated (240x320) so we actually fill a 320 high column, 1 row
-        uint16_t row = video_buffer_lcd[0];
+        // Overlay our audio information on the signal
+        plot_audio_markers(row);
+
         //DEBUG
         //printf("ROW %u\n", row);
         // {//if (row == 1) {
@@ -607,6 +587,9 @@ void video_stream() {
         //     printf("\n");
         //     sleep_ms(791);
         // }
+
+        //restrict output to this row, then stream bytes to fill it
+        //the LCD is rotated (240x320) so we actually fill a 320 row high single column
 
         // column address set
         lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){
@@ -619,6 +602,6 @@ void video_stream() {
             0x01, 0x3f});  // end page -> 319
 
         // pixel data
-        lcd_write_commandX(ILI9341_RAMWR, 2*VIDEO_COLUMNS, (uint8_t*)(&video_buffer_lcd[1]));
+        lcd_write_commandX(ILI9341_RAMWR, 2*VIDEO_COLUMNS, (uint8_t*)video_buffer_lcd);
     }
 }
