@@ -64,7 +64,7 @@ static const OV7670_command
         // Manual output format, RGB, use RGB565 and full 0-255 output range
         {OV7670_REG_COM7, OV7670_COM7_SIZE_VGA | OV7670_COM7_RGB},
         {OV7670_REG_RGB444, 0},
-        {OV7670_REG_COM15, OV7670_COM15_RGB565 | OV7670_COM15_R00FF},
+        {OV7670_REG_COM15, OV7670_COM15_RGB565 | OV7670_COM15_R10F0},
 
         {OV7670_REG_TSLB, OV7670_TSLB_YLAST},    // No auto window
         //{OV7670_REG_COM10, OV7670_COM10_VS_NEG}, // -VSYNC (req by SAMD PCC)
@@ -122,7 +122,7 @@ static const OV7670_command
         {OV7670_REG_COM12, 0x78},
         {0x4D, 0x40}, // Reserved register?
         {0x4E, 0x20}, // Reserved register?
-        {OV7670_REG_GFIX, 0x5D},
+        {OV7670_REG_GFIX, 0x69}, //was 0x5D
         {OV7670_REG_REG74, 0x19},
         {0x8D, 0x4F}, // Reserved register?
         {0x8E, 0x00}, // Reserved register?
@@ -163,8 +163,8 @@ static const OV7670_command
         {OV7670_REG_MTX5, 0x5E},
         {OV7670_REG_MTX6, 0x80}, // 0x40?
         {OV7670_REG_AWBCTR1, 0x11},
-        {OV7670_REG_AWBCTR0, 0x9F}, // Or use 0x9E for advance AWB
-        {OV7670_REG_BRIGHT, 0x00},
+        {OV7670_REG_AWBCTR0, 0x9E}, // Or use 0x9E for advance AWB
+        {OV7670_REG_BRIGHT, 0x40}, //was 0x00
         {OV7670_REG_CONTRAS, 0x40},
         {OV7670_REG_CONTRAS_CENTER, 0x80}, // 0x40?
 
@@ -184,17 +184,11 @@ static const OV7670_command
 
         // Colour balance
         {OV7670_REG_GAIN, 0x00},
-        {OV7670_REG_RED, 0x80},
-        {OV7670_REG_BLUE, 0x80},
+        {OV7670_REG_RED, 0x60},
+        {OV7670_REG_BLUE, 0xF0},
         {OV7670_REG_GGAIN, 0x80},
 
-        //{OV7670_REG_GFIX, 0x5D},
-        //{OV7670_REG_REG74, 0x19},
-        {OV7670_REG_GFIX, 0b11111011}, //00=1x, 01=1.25x, 10=1.5x, 11=1.75x; channels 2 bits each: Gr, Gb, R, B
-        //{OV7670_REG_REG74, 0x1D},
-        //{OV7670_REG_COM13, 0xA0},   //saturation control?
-
-        {OV7670_REG_EDGE, 0x03}, //Edge enhancement factor 
+        {OV7670_REG_EDGE, 0x02}, //Edge enhancement factor 
 
         {OV7670_REG_COM11, 0xFF}, //night mode all options on : automatic
 
@@ -218,8 +212,8 @@ static const OV7670_command
 
         //{OV7670_REG_CLKRC, 0b10000000}, //double clock
         //half and then double the pclk. This seems to tidy up the data quality
-        // {OV7670_REG_CLKRC, 0x1},
-        // {OV7670_REG_DBLV, 0x4A},
+        {OV7670_REG_CLKRC, 0x1},
+        {OV7670_REG_DBLV, 0x4A},
 
         {0xFF, 0xFF},       // End-of-data marker
 };
@@ -452,7 +446,7 @@ void video_init(PIO pio) {
 
     //Initialize SPI port at 4MHz  (required to be called before other functions)
 //    spi_init(spi, 4 * 1000 * 1000);
-//    spi_init(spi, 40 * 1000 * 1000); //LCD can handle 40Mhz?!
+//    spi_init(spi, 10 * 1000 * 1000); //LCD can handle 40Mhz?!
     spi_init(spi, 65 * 1000 * 1000); //LCD can handle 65Mhz?! 
 
     //spi_set_format(spi, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
