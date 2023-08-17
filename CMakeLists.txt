@@ -21,7 +21,11 @@ add_executable(sound-finder
     video.h
     video.c
     ov7670reg.h
+    ov7670.h
+    ov7670.c
+    ili9341reg.h
     ili9341.h
+    ili9341.c
 )
 
 pico_generate_pio_header(sound-finder ${CMAKE_CURRENT_LIST_DIR}/i2s.pio)
