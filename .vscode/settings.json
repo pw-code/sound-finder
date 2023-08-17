@@ -18,6 +18,12 @@
         "type_traits": "c",
         "utility": "c",
         "variant": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "offsets.h": "c",
+        "cstdlib": "c",
+        "*.tcc": "c",
+        "chrono": "c",
+        "cmath": "c",
+        "complex": "c"
     }
 }

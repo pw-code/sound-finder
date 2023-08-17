@@ -67,12 +67,8 @@ int main() {
     // LED flashing
     gpio_init(PIN_LED);
     gpio_set_dir(PIN_LED, GPIO_OUT);
-    gpio_put(PIN_LED, 0);
+    gpio_put(PIN_LED, 1);
 
     // main loop is just audio capture and analysis
-    while(true) {
-        audio_capture_analyse();
-    }
-    
-    return 0;
+    audio_capture_analyse(); //never exits
 }
