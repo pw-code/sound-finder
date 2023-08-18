@@ -15,9 +15,9 @@
 
 
 //double-buffer between DMA samples
-uint32_t capture_buf_data0[2][AUDIO_CHANNEL_BUF_LEN];
-uint32_t capture_buf_data1[2][AUDIO_CHANNEL_BUF_LEN];
-uint32_t capture_buf_data2[2][AUDIO_CHANNEL_BUF_LEN];
+int32_t capture_buf_data0[2][AUDIO_CHANNEL_BUF_LEN];
+int32_t capture_buf_data1[2][AUDIO_CHANNEL_BUF_LEN];
+int32_t capture_buf_data2[2][AUDIO_CHANNEL_BUF_LEN];
 _Atomic uint8_t last_capture_buf;
 
 
@@ -75,7 +75,7 @@ void i2s_dma_handler() {
 }
 
 
-static void i2s_dma_setup_sm(PIO pio, uint sm, uint32_t *capture_buf0, uint32_t *capture_buf1, uint* pChan0, uint* pChan1, bool add_interrupt) {
+static void i2s_dma_setup_sm(PIO pio, uint sm, void *capture_buf0, void *capture_buf1, uint* pChan0, uint* pChan1, bool add_interrupt) {
 
     // Two alternative DMA transfers, with different buffers (reloaded in interrupt handler)
 
@@ -191,7 +191,7 @@ static void capture_dump(uint buffer_num) {
 /**
  * @brief adjust the capture buffer pointer, so that it is pointing at a left(0) or right(1) sample
  */
-static inline uint32_t * adjust_left_right(uint32_t wanted, uint32_t * buffer) {
+static inline uint32_t * adjust_left_right(int32_t wanted, int32_t * buffer) {
     // We can tell left/rigth channel, as the last bit (LSB) is the channel indicator
     if ((*buffer & 1) != (wanted & 1)) {
         buffer++;

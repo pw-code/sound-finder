@@ -24,6 +24,10 @@
         "*.tcc": "c",
         "chrono": "c",
         "cmath": "c",
-        "complex": "c"
+        "complex": "c",
+        "pwm.h": "c",
+        "sync.h": "c",
+        "i2c.h": "c",
+        "sem.h": "c"
     }
 }

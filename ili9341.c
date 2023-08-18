@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "hardware/dma.h"
 #include "hardware/spi.h"
 
 #include "pins.h"
@@ -11,6 +12,8 @@
 
 
 spi_inst_t *lcd_spi;
+
+uint lcd_tx_dma_chan;
 
 
 /**
@@ -97,6 +100,19 @@ void lcd_init(spi_inst_t *spi) {
         0x01, 0x3f});  // end page -> 319
 
     lcd_write_command0(ILI9341_RAMWR);
+
+
+    // Setup for SPI DMA
+    lcd_tx_dma_chan = dma_claim_unused_channel(true);
+
+    dma_channel_config c = dma_channel_get_default_config(lcd_tx_dma_chan);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_dreq(&c, spi_get_dreq(lcd_spi, true));
+    dma_channel_configure(lcd_tx_dma_chan, &c,
+                          &spi_get_hw(lcd_spi)->dr, // write address
+                          NULL,                     // read address - populated when drawing starts
+                          VIDEO_COLUMNS*2,          // 2x because 2 bytes per pixel
+                          false);                   // don't start yet
 }
 
 static void lcd_reg_diag(const char * name, uint8_t cmd, uint8_t num_returned_params) {
@@ -145,7 +161,7 @@ void lcd_diag() {
 }
 
 
-void lcd_draw_row(uint16_t row, uint16_t* buffer) {
+void lcd_draw_row(bool async, uint16_t row, uint16_t* buffer) {
     //restrict output to this row, then stream bytes to fill it
     //the LCD is rotated (240x320) so we actually fill a 320 row high single column
 
@@ -160,6 +176,13 @@ void lcd_draw_row(uint16_t row, uint16_t* buffer) {
         0x01, 0x3f});  // end page -> 319
 
     // pixel data (16 bit buffer as 8bit bytes)
-    lcd_write_commandX(ILI9341_RAMWR, 2*VIDEO_COLUMNS, (uint8_t*)buffer);
+    if (async) {
+        lcd_write_commandX(ILI9341_RAMWR, 2*VIDEO_COLUMNS, (uint8_t*)buffer);
+    } else {
+        dma_channel_set_read_addr(lcd_tx_dma_chan, (uint8_t*)buffer, true); // set buffer & trigger
+    }
+}
 
+bool lcd_is_busy() {
+    return dma_channel_is_busy(lcd_tx_dma_chan) || spi_is_busy(lcd_spi);
 }

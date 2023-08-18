@@ -60,9 +60,6 @@ int main() {
 
     // PIO 1 setup for OV7670 video capture
     video_init(pio1);
-    //trigger video streaming on the second core
-    multicore_launch_core1(video_stream);
-
 
     // LED flashing
     gpio_init(PIN_LED);
@@ -70,5 +67,9 @@ int main() {
     gpio_put(PIN_LED, 1);
 
     // main loop is just audio capture and analysis
-    audio_capture_analyse(); //never exits
+
+    // core 0 handles all the interrupts and video work
+    // core 1 handles audio analysis
+    multicore_launch_core1(audio_capture_analyse); //core 1
+    video_stream(); //core 0
 }

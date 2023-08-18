@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pico/sync.h"
 #include "hardware/i2c.h"
 #include "hardware/dma.h"
 #include "hardware/pwm.h"
@@ -29,6 +30,9 @@ uint dma_pixel_chan_0;
 uint dma_pixel_chan_1;
 
 i2c_inst_t *ov7670_i2c;
+
+semaphore_t video_sem;
+
 
 // OV7670 Initialisation sequence
 
@@ -221,6 +225,8 @@ void pixel_dma_handler() {
         // Reset buffer, ready for next time we are triggered/chained
         dma_channel_set_write_addr(dma_pixel_chan_1, video_buffer[1], false);
     }
+
+    sem_release(&video_sem);
 }
 
 
@@ -285,6 +291,8 @@ static uint8_t ov7670_read_reg(uint8_t reg) {
 void ov7670_init(PIO pio, i2c_inst_t *i2c) {
     ov7670_pio = pio;
     ov7670_i2c = i2c;
+    
+    sem_init(&video_sem, 0, 1);
 
     // OV7670 needs XCLK before it will function. Typical speed 24MHz
     gpio_set_function(PIN_OV7670_XCLK, GPIO_FUNC_PWM);
@@ -329,14 +337,14 @@ void ov7670_diag() {
  * @brief Wait for a line of ov7670 screen data
  */
 void ov7670_wait_for_buffer() {
+    sem_acquire_blocking(&video_sem);
 
-    // Wait for either of the video DMA IRQs to trigger (should happen pretty soon at 30fps)
-    while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) == 0) {
-        tight_loop_contents();
-    }
-    // Then wait for it to be serviced (so we can trust last_video_buf is up-to-date)
-    while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) != 0) {
-        tight_loop_contents();
-    }
-   
+    // // Wait for either of the video DMA IRQs to trigger (should happen pretty soon at 30fps)
+    // while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) == 0) {
+    //     tight_loop_contents();
+    // }
+    // // Then wait for it to be serviced (so we can trust last_video_buf is up-to-date)
+    // while ((dma_hw->intr & ((1u << dma_pixel_chan_0) | (1u << dma_pixel_chan_1))) != 0) {
+    //     tight_loop_contents();
+    // }  
 }

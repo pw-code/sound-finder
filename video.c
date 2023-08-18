@@ -43,6 +43,7 @@ void video_init(PIO pio) {
 
 
     ov7670_init(pio, i2c);
+    ov7670_diag();
 
 
     // Map SPI0 to GPIO pins 16..19 */
@@ -76,6 +77,7 @@ void video_init(PIO pio) {
 
 
     lcd_init(spi);
+    lcd_diag();
 
     //TODO: init_sd_card();
 }
@@ -113,10 +115,6 @@ static void plot_audio_markers(uint16_t row) {
 // We add data overlays as we go.
 // It does not matter that DMA is overwriting data as we go, as video pixels are mostly the same each frame (a bit of tearing may occur)
 void video_stream() {
-
-    lcd_diag();
-    ov7670_diag();
-
     while (true) {
         // Grab copy of latest row - then send it
 
@@ -144,6 +142,10 @@ void video_stream() {
         //     sleep_ms(791);
         // }
 
-        lcd_draw_row(row, video_buffer_lcd);
+        // draw async (dma), unless it's still outputing the last drawing
+        // this allows us to process a new row while the last is writing
+        if (!lcd_is_busy()) {
+            lcd_draw_row(true, row, video_buffer_lcd);
+        }
     }
 }
