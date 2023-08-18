@@ -43,6 +43,9 @@ target_link_libraries(sound-finder
     hardware_pwm
     )
 
+# use blocked, rather than striped ram. To try to limit RAM stall between core0 and core1
+pico_set_binary_type(sound-finder blocked_ram)
+
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(sound-finder)
 
