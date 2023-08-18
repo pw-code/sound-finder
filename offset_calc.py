@@ -9,9 +9,9 @@ import pprint
 # Flattened field of view in front of sensors. Sensor center is (0,0,0)
 # Actual positons will be centered on (0,0,0). e.g. Width 10 is: -5 <= x <= 5
 
-WIDTH=10        # x axis
-DEPTH=10        # y axis
-HEIGHT=3        # z axis
+WIDTH=8        # x axis
+DEPTH=6        # y axis
+HEIGHT=3       # z axis
 
 NUM_CHANNELS=6
 SAMPLE_RATE_HZ=44100 # see main.c

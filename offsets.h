@@ -9,8 +9,8 @@
  (0.059999999999999915, 0, -0.10392304845413268)]
 */
 
-#define SAMPLE_OFFSET_WIDTH 10 /* x axis */
-#define SAMPLE_OFFSET_DEPTH 10 /* y axis */
+#define SAMPLE_OFFSET_WIDTH 8 /* x axis */
+#define SAMPLE_OFFSET_DEPTH 6 /* y axis */
 #define SAMPLE_OFFSET_HEIGHT 3 /* z axis */
 #define SAMPLE_OFFSET_NUM_CHANNELS 6
 #define SAMPLE_OFFSET_HZ 44100
