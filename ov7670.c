@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
-#include "pico/sync.h"
+#include "pico/sem.h"
 #include "hardware/i2c.h"
 #include "hardware/dma.h"
 #include "hardware/pwm.h"
@@ -31,8 +31,7 @@ uint dma_pixel_chan_1;
 
 i2c_inst_t *ov7670_i2c;
 
-semaphore_t video_sem;
-
+struct semaphore video_sem;
 
 // OV7670 Initialisation sequence
 

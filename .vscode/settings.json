@@ -28,6 +28,11 @@
         "pwm.h": "c",
         "sync.h": "c",
         "i2c.h": "c",
-        "sem.h": "c"
+        "sem.h": "c",
+        "lock_core.h": "c",
+        "time.h": "c",
+        "sio.h": "c",
+        "address_mapped.h": "c",
+        "platform.h": "c"
     }
 }
