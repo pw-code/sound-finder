@@ -108,14 +108,10 @@ static void plot_audio_markers(int row) {
     //TODO: use data from audio module sound intensity data
     // extern uint32_t capture_magnitudes[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT];
     // extern uint32_t screen_offsets[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT];
-    for (uint w = 0; w < SAMPLE_OFFSET_WIDTH; ++w) {
-        for (uint d = 0; d < SAMPLE_OFFSET_DEPTH; ++d) {
-            for (uint h = 0; h < SAMPLE_OFFSET_HEIGHT; ++h) {
-                int x = w<<5; //screen_offsets[w][d][h].x;
-                int y = h<<6; //screen_offsets[w][d][h].y;
-                plot_audio_marker(row, x, y);
-            }
-        }
+    for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
+        int x = screen_offsets[s].x;
+        int y = screen_offsets[s].y;
+        plot_audio_marker(row, x, y);
     }
     // plot_audio_marker(row, 160, 100);
     // plot_audio_marker(row, 315, 10);

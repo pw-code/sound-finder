@@ -23,7 +23,7 @@ _Atomic uint8_t last_capture_buf;
 
 int from_index;
 int to_index;
-uint32_t capture_magnitudes[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT];
+uint32_t capture_magnitudes[SAMPLE_OFFSET_COUNT];
 
 
 uint handler_dma_channel_0, handler_dma_channel_1;
@@ -215,27 +215,23 @@ static void analyse_capture(uint buffer_num) {
     const uint num_samples = (to_index - from_index) / 2;
 
     // For each of the sample offsets, calculate the merged audio's average magnitude and record it for later
-    for (uint w = 0; w < SAMPLE_OFFSET_WIDTH; ++w) {
-        for (uint d = 0; d < SAMPLE_OFFSET_DEPTH; ++d) {
-            for (uint h = 0; h < SAMPLE_OFFSET_HEIGHT; ++h) {
+    for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
 
-                // analyse stereo sample at this position
-                uint32_t sum = 0;
-                for (uint i = from_index; i < to_index; i += 2) {
+        // analyse stereo sample at this position
+        uint32_t sum = 0;
+        for (uint i = from_index; i < to_index; i += 2) {
 
-                    int32_t sample = 0;
-                    for (uint c = 0; c < SAMPLE_OFFSET_NUM_CHANNELS; ++c) {
-                        int o = sample_offsets[w][d][h][c];
-                        sample += buffer[c][i + o];
-                    }
-
-                    //sum += (abs(sample) / SAMPLE_OFFSET_NUM_CHANNELS);
-                    sum += (abs(sample) >> 3); // div 8 is close enough for us, and much faster than an actual divide (by 6 channels)
-                }
-
-                capture_magnitudes[w][d][h] = sum / num_samples;
+            int32_t sample = 0;
+            for (uint c = 0; c < SAMPLE_OFFSET_NUM_CHANNELS; ++c) {
+                int o = sample_offsets[s][c];
+                sample += buffer[c][i + o];
             }
+
+            //sum += (abs(sample) / SAMPLE_OFFSET_NUM_CHANNELS);
+            sum += (abs(sample) >> 3); // div 8 is close enough for us, and much faster than an actual divide (by 6 channels)
         }
+
+        capture_magnitudes[s] = sum / num_samples;
     }
 
     //printf("CAPTURE %d at %d\n", capture_count, buffer_num);
@@ -255,21 +251,17 @@ void audio_capture_analyse() {
     // calculate 'from' & 'to' sample indexes that are always safe to use with all possible offsets
     from_index = 0;
     to_index = AUDIO_CHANNEL_BUF_LEN - 1;
-    for (uint w = 0; w < SAMPLE_OFFSET_WIDTH; ++w) {
-        for (uint d = 0; d < SAMPLE_OFFSET_DEPTH; ++d) {
-            for (uint h = 0; h < SAMPLE_OFFSET_HEIGHT; ++h) {
-                for (uint c = 0; c < SAMPLE_OFFSET_NUM_CHANNELS; ++c) {
-                    int o = sample_offsets[w][d][h][c];
-                    o *= 2; //because there are two samples per buffer
+    for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
+        for (uint c = 0; c < SAMPLE_OFFSET_NUM_CHANNELS; ++c) {
+            int o = sample_offsets[s][c];
+            int index = o * 2; //because there are two samples per buffer
 
-                    // inefficient, but I don't care, it only runs once, and this is easier to think about
-                    while ((from_index+o) < 0) {
-                        from_index += 2;
-                    }
-                    while ((to_index+o) >= (AUDIO_CHANNEL_BUF_LEN-2)) {
-                        to_index -= 2;
-                    }
-                }
+            // inefficient, but I don't care, it only runs once, and this is easier to think about
+            while ((from_index+index) < 0) {
+                from_index += 2;
+            }
+            while ((to_index+index) >= (AUDIO_CHANNEL_BUF_LEN-2)) {
+                to_index -= 2;
             }
         }
     }

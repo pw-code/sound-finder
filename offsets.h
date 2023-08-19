@@ -9,11 +9,15 @@
  (0.059999999999999915, 0, -0.10392304845413268)]
 */
 
-#define SAMPLE_OFFSET_WIDTH 8 /* x axis */
-#define SAMPLE_OFFSET_DEPTH 6 /* y axis */
-#define SAMPLE_OFFSET_HEIGHT 3 /* z axis */
+#define SAMPLE_OFFSET_COUNT 84
 #define SAMPLE_OFFSET_NUM_CHANNELS 6
 #define SAMPLE_OFFSET_HZ 44100
 
-/* Sample Offsets[x,y,z,chan] */
-extern const int sample_offsets[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT][SAMPLE_OFFSET_NUM_CHANNELS];
+/* Sample Offsets[point,chan] */
+extern const int sample_offsets[SAMPLE_OFFSET_COUNT][SAMPLE_OFFSET_NUM_CHANNELS];
+
+/* Screen Offsets[point,chan] */
+typedef struct screen_point {
+    int x, y;
+} screen_point_t;
+extern const screen_point_t screen_offsets[SAMPLE_OFFSET_COUNT];
