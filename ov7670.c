@@ -168,7 +168,7 @@ static const OV7670_command
 
         // 3.3 Frame rate adjustment for 13 Mhz input clock
         // 14.3fps, PCLK = 13Mhz
-        {0x11, 0x01},
+        {0x11, 0x02}, //was 0x01, slowed down to reduce fps and leave more video overlay processing time
         {0x6b, 0x4a},
         {0x2a, 0x00},
         {0x2b, 0x00},
@@ -178,7 +178,7 @@ static const OV7670_command
         // 4.2 Night Mode with Auto Frame Rate
         // 14.3fps ~ 3.6fps night mode for 50Hz light environment
         {0x3b, 0xca},
-        {0x11, 0x01},
+        {0x11, 0x02}, //was 0x01, slowed down to reduce fps and leave more video overlay processing time
 
 #undef OV7670_SHOW_TEST_PATTERN
 #ifdef OV7670_SHOW_TEST_PATTERN

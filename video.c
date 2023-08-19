@@ -9,6 +9,7 @@
 
 #include "pins.h"
 #include "video.h"
+#include "offsets.h" //for drawing square size
 #include "audio.h" //for capture analysis data
 
 #include "ili9341.h"
@@ -25,6 +26,7 @@ _Atomic uint8_t last_video_buf;
 // Translated pixels, with out overlays included, for LCD output
 uint16_t video_buffer_lcd[VIDEO_COLUMNS];
 
+uint32_t frame_counter = 0;
 
 //====================================================================================================
 
@@ -84,38 +86,34 @@ void video_init(PIO pio) {
 }
 
 
-static void plot_audio_marker(int row, int marker_x, int marker_y) {
+static void plot_audio_marker(int row, int marker_x, int marker_y, uint32_t magnitude) {
 
     // Draw a square around the given spot
-    static const int square_size = 15;
+    // Redness will be based on magnitude (top 3 bits??)
+    const uint16_t r = 0x80 | (magnitude >> 24);
 
-    if (row >= (marker_y - square_size) && row < (marker_y + square_size)) {
-        int minx = marker_x - square_size;
+    if (row >= (marker_y - SQUARE_SIZE) && row < (marker_y + SQUARE_SIZE)) {
+        int minx = marker_x - SQUARE_SIZE;
         if (minx < 0) { minx = 0; }
-        int maxx = marker_x + square_size;
+        int maxx = marker_x + SQUARE_SIZE;
         if (maxx > VIDEO_COLUMNS) { maxx = VIDEO_COLUMNS; }
         for (int x = minx; x < maxx; ++x) {
-            //replace RED (endianness means it's in the middle 5 bits)
+            //replace RED (endianness means it's in an odd place in the buffer)
             // rrrrrggggggbbbbb =>  gggbbbbbrrrrrggg
             //                    0b1110011100000001 
             //also remove the top 2 bits of G & B too (fade away)
-            video_buffer_lcd[x] = (video_buffer_lcd[x] & 0b1110011100000001) | 0b0000000011111000;
+            video_buffer_lcd[x] = (video_buffer_lcd[x] & 0b1110011100000001) | (r & 0b0000000011111000);
         }
     }
 }
 
 static void plot_audio_markers(int row) {
-    //TODO: use data from audio module sound intensity data
-    // extern uint32_t capture_magnitudes[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT];
-    // extern uint32_t screen_offsets[SAMPLE_OFFSET_WIDTH][SAMPLE_OFFSET_DEPTH][SAMPLE_OFFSET_HEIGHT];
     for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
         int x = screen_offsets[s].x;
         int y = screen_offsets[s].y;
-        plot_audio_marker(row, x, y);
+        uint32_t magnitude = capture_magnitudes[s];
+        plot_audio_marker(row, x, y, magnitude);
     }
-    // plot_audio_marker(row, 160, 100);
-    // plot_audio_marker(row, 315, 10);
-    // plot_audio_marker(row, 5, 235);
 }
 
 // Continuously stream the OV7670 data to the SPI TFT-LCD display

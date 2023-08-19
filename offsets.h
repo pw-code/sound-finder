@@ -12,6 +12,7 @@
 #define SAMPLE_OFFSET_COUNT 84
 #define SAMPLE_OFFSET_NUM_CHANNELS 6
 #define SAMPLE_OFFSET_HZ 44100
+#define SQUARE_SIZE 32
 
 /* Sample Offsets[point,chan] */
 extern const int sample_offsets[SAMPLE_OFFSET_COUNT][SAMPLE_OFFSET_NUM_CHANNELS];

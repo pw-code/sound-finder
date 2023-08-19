@@ -14,8 +14,9 @@ SPEED_OF_SOUND=343   #343 m / sec
 #camera specs
 CAMERA_RES_X=320
 CAMERA_RES_Y=240
-CAMERA_FOV=25  #field of view. Will have to determine this imperically as I don't know the specs
+CAMERA_FOV=60  #field of view. Will have to determine this imperically as I don't know the specs
 
+SQUARE_SIZE = 32 #should match drawing code
 
 # Calculate a range of points in 3D space in front of the camera.
 # Positions in meters (or factions of) with the camera centered at (0,0,0).
@@ -81,125 +82,35 @@ for p in range(num_points):
 
 ###############################################################################################################################
 
-def project_3d_to_2d(points_3d, intrinsic_matrix, extrinsic_matrix, viewport):
-    """
-    Project 3D world coordinates into 2D screen coordinates.
+distances=set(map(lambda p: p[1], sound_points))
 
-    :param points_3d: Array of 3D world coordinates (shape: N x 3).
-    :param intrinsic_matrix: 3x3 camera intrinsic matrix.
-    :param extrinsic_matrix: 4x4 camera extrinsic matrix.
-    :param viewport: Tuple (width, height) of the viewport dimensions.
-    :return: Array of 2D screen coordinates (shape: N x 2).
-    """
-    # Add homogeneous coordinates to 3D points
-    ones = np.ones((points_3d.shape[0], 1))
-    points_3d_homo = np.hstack((points_3d, ones))
+def calc_distance_size(d):
+    points=list(filter(lambda p: p[1]==d, sound_points))
+    minx = min(map(lambda p: p[0], points))
+    maxx = max(map(lambda p: p[0], points))
+    minz = min(map(lambda p: p[2], points))
+    maxz = max(map(lambda p: p[2], points))
+    rangex = maxx-minx
+    rangez = maxz-minz
+    return [(minx, minz), (rangex, rangez)]
 
-    # Apply extrinsic matrix
-    transformed_points = np.dot(extrinsic_matrix, points_3d_homo.T).T
+size_by_distance={d: calc_distance_size(d) for d in distances}
 
-    # Apply intrinsic matrix
-    projected_points = np.dot(intrinsic_matrix, transformed_points[:, :3].T).T
-
-    # Normalize homogeneous coordinates
-    projected_points /= projected_points[:, 2:3]
-
-    # Map to viewport coordinates
-    x = projected_points[:, 0]
-    y = projected_points[:, 1]
-    x_min, y_min = viewport
-    x_max = x_min + viewport[0]
-    y_max = y_min + viewport[1]
-    mapped_x = (x + 1) * 0.5 * (x_max - x_min) + x_min
-    mapped_y = (1 - y) * 0.5 * (y_max - y_min) + y_min
-
-    return np.column_stack((mapped_x, mapped_y))
-
-def rotation_matrix_from_euler(yaw, pitch, roll):
-    """
-    Calculate the 3x3 rotation matrix from yaw, pitch, and roll angles.
-
-    :param yaw: Yaw angle (rotation around vertical axis, in radians).
-    :param pitch: Pitch angle (rotation around lateral axis, in radians).
-    :param roll: Roll angle (rotation around longitudinal axis, in radians).
-    :return: 3x3 rotation matrix.
-    """
-    R_x = np.array([[1, 0, 0],
-                    [0, np.cos(roll), -np.sin(roll)],
-                    [0, np.sin(roll), np.cos(roll)]])
-
-    R_y = np.array([[np.cos(pitch), 0, np.sin(pitch)],
-                    [0, 1, 0],
-                    [-np.sin(pitch), 0, np.cos(pitch)]])
-
-    R_z = np.array([[np.cos(yaw), -np.sin(yaw), 0],
-                    [np.sin(yaw), np.cos(yaw), 0],
-                    [0, 0, 1]])
-
-    rotation_matrix = np.dot(R_z, np.dot(R_y, R_x))
-    return rotation_matrix
-
-def extrinsic_matrix_from_position_and_angles(position, yaw, pitch, roll):
-    """
-    Calculate the 4x4 extrinsic matrix from position and rotation angles.
-
-    :param position: 3-element array representing position (x, y, z).
-    :param yaw: Yaw angle (rotation around vertical axis, in radians).
-    :param pitch: Pitch angle (rotation around lateral axis, in radians).
-    :param roll: Roll angle (rotation around longitudinal axis, in radians).
-    :return: 4x4 extrinsic matrix.
-    """
-    rotation_matrix = rotation_matrix_from_euler(yaw, pitch, roll)
-    extrinsic_matrix = np.eye(4)
-    extrinsic_matrix[:3, :3] = rotation_matrix
-    extrinsic_matrix[:3, 3] = position
-    return extrinsic_matrix
-
-# Example position and angles
-camera_position = np.array([0, 0, 0])
-yaw = np.radians(0)
-pitch = np.radians(0)
-roll = np.radians(0)
-
-# Calculate the extrinsic matrix (camera pose)
-extrinsic_matrix = extrinsic_matrix_from_position_and_angles(camera_position, yaw, pitch, roll)
-
-
-def intrinsic_matrix_from_fov(image_width, image_height, fov_degrees):
-    """
-    Calculate the 3x3 intrinsic matrix from camera FOV.
-
-    :param image_width: Width of the image in pixels.
-    :param image_height: Height of the image in pixels.
-    :param fov_degrees: Horizontal field of view in degrees.
-    :return: 3x3 intrinsic matrix.
-    """
-    fov_radians = np.radians(fov_degrees)
-    focal_length = (image_width / 2) / np.tan(fov_radians / 2)
-    cx = image_width / 2
-    cy = image_height / 2
-
-    intrinsic_matrix = np.array([[focal_length, 0, cx],
-                                 [0, focal_length, cy],
-                                 [0, 0, 1]])
-    return intrinsic_matrix
-
-# Example intrinsic matrix (camera calibration)
-intrinsic_matrix = intrinsic_matrix_from_fov(CAMERA_RES_X, CAMERA_RES_Y, CAMERA_FOV)
-
+offset_x = (SQUARE_SIZE * 1.5)
+offset_y = (SQUARE_SIZE * 1.5)
+scale_x = CAMERA_RES_X - 2*offset_x
+scale_y = CAMERA_RES_Y - 2*offset_y
 
 # Convert 3D points into 2D screen space
 # screen_offsets[point] is audio sample display position on screen
-#screen_offsets=[(0,0) for i in range(num_points)]
-# for p in range(num_points):
-#     # onscreen.x = ((camera.zfar / vertex.in_view.z) * vertex.in_view.x - camera.fov) + screen.width / 2.0;
-#     # onscreen.y = ((scene.zfar / vertex.in_view.z) * vertex.in_view.y - camera.fov) + screen.height / 2.0;
-#     x = ((camera.zfar / vertex.in_view.z) * vertex.in_view.x - camera.fov) + screen.width / 2.0;
-#     y = ((scene.zfar / vertex.in_view.z) * vertex.in_view.y - camera.fov) + screen.height / 2.0;
-#     screen_offsets[p] = (x,y)
-# Project 3D points to 2D screen coordinates
-viewport = (CAMERA_RES_X, CAMERA_RES_Y)
-screen_offsets = project_3d_to_2d(np.array(sound_points), intrinsic_matrix, extrinsic_matrix, viewport)
+screen_offsets=[(0,0) for i in range(num_points)]
+for p in range(num_points):
+    point = sound_points[p]
+    size = size_by_distance[point[1]]
+    #scale this point within it's size range, then scale to screen size
+    x = (point[0] - size[0][0]) / size[1][0]
+    y = (point[2] - size[0][1]) / size[1][1]
+    screen_offsets[p] = (int(x*scale_x)+offset_x, int(y*scale_y)+offset_y)
 
 
 ###############################################################################################################################
@@ -208,6 +119,7 @@ screen_offsets = project_3d_to_2d(np.array(sound_points), intrinsic_matrix, extr
 print("#define SAMPLE_OFFSET_COUNT " + str(num_points))
 print("#define SAMPLE_OFFSET_NUM_CHANNELS " + str(NUM_CHANNELS))
 print("#define SAMPLE_OFFSET_HZ " + str(SAMPLE_RATE_HZ))
+print("#define SQUARE_SIZE " + str(SQUARE_SIZE))
 print()
 
 print("/* Sample Offsets[point,chan] */")
