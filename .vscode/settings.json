@@ -33,6 +33,11 @@
         "time.h": "c",
         "sio.h": "c",
         "address_mapped.h": "c",
-        "platform.h": "c"
+        "platform.h": "c",
+        "*.inc": "c",
+        "random": "c",
+        "limits": "c",
+        "string.h": "c",
+        "math.h": "c"
     }
 }

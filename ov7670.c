@@ -43,138 +43,142 @@ typedef struct {
 static const OV7670_command
     OV7670_init[] = {
         // Initialisation sequences from Adafruit: https://github.com/adafruit/Adafruit_OV7670/blob/master/src/ov7670.c
-        {OV7670_REG_COM7, OV7670_COM7_RESET},
 
-        // Manual output format, RGB, use RGB565 and full 0-255 output range
+    // https://gist.github.com/bsantraigi/a0d8678fbd5759468bc57b42d92e2d99
+        { OV7670_REG_TSLB, 0x04 },	/* OV */
+//        { OV7670_REG_COM7, 0 },	/* VGA */
         {OV7670_REG_COM7, OV7670_COM7_SIZE_VGA | OV7670_COM7_RGB},
+//        {OV7670_REG_COM7, OV7670_COM7_SIZE_QVGA | OV7670_COM7_RGB},
         {OV7670_REG_RGB444, 0},
-        {OV7670_REG_COM15, OV7670_COM15_RGB565 | OV7670_COM15_R10F0},
+        {OV7670_REG_COM15, OV7670_COM15_RGB565 | OV7670_COM15_R00FF},
 
-        {OV7670_REG_TSLB, OV7670_TSLB_YLAST},    // No auto window
-        //{OV7670_REG_COM10, OV7670_COM10_VS_NEG}, // -VSYNC (req by SAMD PCC)
+        { OV7670_REG_COM3, OV7670_COM3_DCWEN },
+        { OV7670_REG_COM14, 0x19 },
+        { 0x72, 0x11 },
+        { 0x73, 0xf1 },
 
-        {OV7670_REG_SLOP, 0x20},
-        {OV7670_REG_GAM_BASE, 0x1C},
-        {OV7670_REG_GAM_BASE + 1, 0x28},
-        {OV7670_REG_GAM_BASE + 2, 0x3C},
-        {OV7670_REG_GAM_BASE + 3, 0x55},
-        {OV7670_REG_GAM_BASE + 4, 0x68},
-        {OV7670_REG_GAM_BASE + 5, 0x76},
-        {OV7670_REG_GAM_BASE + 6, 0x80},
-        {OV7670_REG_GAM_BASE + 7, 0x88},
-        {OV7670_REG_GAM_BASE + 8, 0x8F},
-        {OV7670_REG_GAM_BASE + 9, 0x96},
-        {OV7670_REG_GAM_BASE + 10, 0xA3},
-        {OV7670_REG_GAM_BASE + 11, 0xAF},
-        {OV7670_REG_GAM_BASE + 12, 0xC4},
-        {OV7670_REG_GAM_BASE + 13, 0xD7},
-        {OV7670_REG_GAM_BASE + 14, 0xE8},
+        { OV7670_REG_HSTART, 0x16 },
+        { OV7670_REG_HSTOP, 0x04 },
+        { OV7670_REG_HREF, 0xa4 },
+        { OV7670_REG_VSTART, 0x02 },
+        { OV7670_REG_VSTOP, 0x7a },
+        { OV7670_REG_VREF, 0x0a },
 
-        {OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_BANDING},
-        {OV7670_REG_GAIN, 0x00},
-        {OV7670_COM2_SSLEEP, 0x00},
-        {OV7670_REG_COM4, 0x00},
-        {OV7670_REG_COM9, 0x20}, // Max AGC value
-        {OV7670_REG_BD50MAX, 0x05},
-        {OV7670_REG_BD60MAX, 0x07},
-        {OV7670_REG_AEW, 0x75},
-        {OV7670_REG_AEB, 0x63},
-        {OV7670_REG_VPT, 0xA5},
-        {OV7670_REG_HAECC1, 0x78},
-        {OV7670_REG_HAECC2, 0x68},
-        {0xA1, 0x03},              // Reserved register?
-        {OV7670_REG_HAECC3, 0xDF}, // Histogram-based AEC/AGC setup
-        {OV7670_REG_HAECC4, 0xDF},
-        {OV7670_REG_HAECC5, 0xF0},
-        {OV7670_REG_HAECC6, 0x90},
-        {OV7670_REG_HAECC7, 0x94},
-        {OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP |
-                              OV7670_COM8_BANDING | OV7670_COM8_AGC |
-                              OV7670_COM8_AEC},
-        {OV7670_REG_COM5, 0x61},
-        {OV7670_REG_COM6, 0x4B},
-        {0x16, 0x02},            // Reserved register?
-        {OV7670_REG_MVFP, 0x07}, // 0x07,
-        {OV7670_REG_ADCCTR1, 0x02},
-        {OV7670_REG_ADCCTR2, 0x91},
-        {0x29, 0x07}, // Reserved register?
-        {OV7670_REG_CHLF, 0x0B},
-        {0x35, 0x0B}, // Reserved register?
-        {OV7670_REG_ADC, 0x1D},
-        {OV7670_REG_ACOM, 0x71},
-        {OV7670_REG_OFON, 0x2A},
-        {OV7670_REG_COM12, 0x78},
-        {0x4D, 0x40}, // Reserved register?
-        {0x4E, 0x20}, // Reserved register?
-        {OV7670_REG_GFIX, 0x69}, //was 0x5D
-        {OV7670_REG_REG74, 0x19},
-        {0x8D, 0x4F}, // Reserved register?
-        {0x8E, 0x00}, // Reserved register?
-        {0x8F, 0x00}, // Reserved register?
-        {0x90, 0x00}, // Reserved register?
-        {0x91, 0x00}, // Reserved register?
-        {OV7670_REG_DM_LNL, 0x00},
-        {0x96, 0x00}, // Reserved register?
-        {0x9A, 0x80}, // Reserved register?
-        {0xB0, 0x84}, // Reserved register?
-        {OV7670_REG_ABLC1, 0x0C},
-        {0xB2, 0x0E}, // Reserved register?
-        {OV7670_REG_THL_ST, 0x82},
-        {0xB8, 0x0A}, // Reserved register?
-        {OV7670_REG_AWBC1, 0x14},
-        {OV7670_REG_AWBC2, 0xF0},
-        {OV7670_REG_AWBC3, 0x34},
-        {OV7670_REG_AWBC4, 0x58},
-        {OV7670_REG_AWBC5, 0x28},
-        {OV7670_REG_AWBC6, 0x3A},
-        {0x59, 0x88}, // Reserved register?
-        {0x5A, 0x88}, // Reserved register?
-        {0x5B, 0x44}, // Reserved register?
-        {0x5C, 0x67}, // Reserved register?
-        {0x5D, 0x49}, // Reserved register?
-        {0x5E, 0x0E}, // Reserved register?
-        {OV7670_REG_LCC3, 0x04},
-        {OV7670_REG_LCC4, 0x20},
-        {OV7670_REG_LCC5, 0x05},
-        {OV7670_REG_LCC6, 0x04},
-        {OV7670_REG_LCC7, 0x08},
-        {OV7670_REG_AWBCTR3, 0x0A},
-        {OV7670_REG_AWBCTR2, 0x55},
-        {OV7670_REG_MTX1, 0x80},
-        {OV7670_REG_MTX2, 0x80},
-        {OV7670_REG_MTX3, 0x00},
-        {OV7670_REG_MTX4, 0x22},
-        {OV7670_REG_MTX5, 0x5E},
-        {OV7670_REG_MTX6, 0x80}, // 0x40?
-        {OV7670_REG_AWBCTR1, 0x11},
-        {OV7670_REG_AWBCTR0, 0x9E}, // Or use 0x9E for advance AWB
-        {OV7670_REG_BRIGHT, 0x40}, //was 0x00
-        {OV7670_REG_CONTRAS, 0x40},
-        {OV7670_REG_CONTRAS_CENTER, 0x80}, // 0x40?
+        /* Mystery scaling numbers */
+        { 0x70, 0x3a }, { 0x71, 0x35 },
+//        { 0x72, 0x11 }, { 0x73, 0xf0 },
+        { 0xa2,/* 0x02 changed to 1*/1 }, { OV7670_REG_COM10, 0x0 },
+        /* Gamma curve values */
+        { 0x7a, 0x20 }, { 0x7b, 0x10 },
+        { 0x7c, 0x1e }, { 0x7d, 0x35 },
+        { 0x7e, 0x5a }, { 0x7f, 0x69 },
+        { 0x80, 0x76 }, { 0x81, 0x80 },
+        { 0x82, 0x88 }, { 0x83, 0x8f },
+        { 0x84, 0x96 }, { 0x85, 0xa3 },
+        { 0x86, 0xaf }, { 0x87, 0xc4 },
+        { 0x88, 0xd7 }, { 0x89, 0xe8 },
+        /* AGC and AEC parameters.  Note we start by disabling those features,
+        then turn them only after tweaking the values. */
+        { OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP },
+        { OV7670_REG_GAIN, 0 }, { OV7670_REG_AECH, 0 },
+        { OV7670_REG_COM4, 0x40 }, /* magic reserved bit */
+        { OV7670_REG_COM17, 0x00 },
+        { OV7670_REG_COM9, 0x18 }, /* 4x gain + magic rsvd bit */
+        { OV7670_REG_BD50MAX, 0x05 }, { OV7670_REG_BD60MAX, 0x07 },
+        { OV7670_REG_AEW, 0x95 }, { OV7670_REG_AEB, 0x33 },
+        { OV7670_REG_VPT, 0xe3 }, { OV7670_REG_HAECC1, 0x78 },
+        { OV7670_REG_HAECC2, 0x68 }, { 0xa1, 0x03 }, /* magic */
+        { OV7670_REG_HAECC3, 0xd8 }, { OV7670_REG_HAECC4, 0xd8 },
+        { OV7670_REG_HAECC5, 0xf0 }, { OV7670_REG_HAECC6, 0x90 },
+        { OV7670_REG_HAECC7, 0x94 },
+        { OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_AGC | OV7670_COM8_AEC },
+        { 0x30, 0 }, { 0x31, 0 },//disable some delays
+        /* Almost all of these are magic "reserved" values.  */
+        { OV7670_REG_COM5, 0x61 }, { OV7670_REG_COM6, 0x4b },
+        { 0x16, 0x02 }, { OV7670_REG_MVFP, 0x07 },
+        { 0x21, 0x02 }, { 0x22, 0x91 },
+        { 0x29, 0x07 }, { 0x33, 0x0b },
+        { 0x35, 0x0b }, { 0x37, 0x1d },
+        { 0x38, 0x71 }, { 0x39, 0x2a },
+        { OV7670_REG_COM12, 0x78 }, { 0x4d, 0x40 },
+        { 0x4e, 0x20 }, { OV7670_REG_GFIX, 0 },
+        /*{0x6b, 0x4a},*/{ 0x74, 0x10 },
+        { 0x8d, 0x4f }, { 0x8e, 0 },
+        { 0x8f, 0 }, { 0x90, 0 },
+        { 0x91, 0 }, { 0x96, 0 },
+        { 0x9a, 0 }, { 0xb0, 0x84 },
+        { 0xb1, 0x0c }, { 0xb2, 0x0e },
+        { 0xb3, 0x82 }, { 0xb8, 0x0a },
 
+        /* More reserved magic, some of which tweaks white balance */
+        { 0x43, 0x0a }, { 0x44, 0xf0 },
+        { 0x45, 0x34 }, { 0x46, 0x58 },
+        { 0x47, 0x28 }, { 0x48, 0x3a },
+        { 0x59, 0x88 }, { 0x5a, 0x88 },
+        { 0x5b, 0x44 }, { 0x5c, 0x67 },
+        { 0x5d, 0x49 }, { 0x5e, 0x0e },
+        { 0x6c, 0x0a }, { 0x6d, 0x55 },
+        { 0x6e, 0x11 }, { 0x6f, 0x9e }, /* it was 0x9F "9e for advance AWB" */
+        { 0x6a, 0x40 },
+        { OV7670_REG_BLUE, 0x60 },
+        { OV7670_REG_RED, 0x40 },
+        { OV7670_REG_GGAIN, 0x80 },
+        { OV7670_REG_COM8, OV7670_COM8_FASTAEC | OV7670_COM8_AECSTEP | OV7670_COM8_AGC | OV7670_COM8_AEC | OV7670_COM8_AWB },
 
-        //Switch to QVGA RGB565
-        //From https://github.com/ComputerNerd/ov7670-simple/blob/master/main.c
-    	{OV7670_REG_COM3,4},	// REG_COM3 
-        {OV7670_REG_COM14, 0x19},
-		{0x72, 0x11},
-		{0x73, 0xf1},
-		{OV7670_REG_HSTART, 0x15},
-		{OV7670_REG_HSTOP,  0x03},
-		{OV7670_REG_HREF,   0x3F},		
-		{OV7670_REG_VSTART, 0x02},
-		{OV7670_REG_VSTOP,  0x7a},
-		{OV7670_REG_VREF,   0x0a},
+        /* Matrix coefficients */
+        { 0x4f, 0x80 }, { 0x50, 0x80 },
+        { 0x51, 0 },    { 0x52, 0x22 },
+        { 0x53, 0x5e }, { 0x54, 0x80 },
+        { 0x58, 0x9e },
 
-        // Colour balance
-        {OV7670_REG_GAIN, 0x00},
-        {OV7670_REG_RED, 0x60},
-        {OV7670_REG_BLUE, 0xF0},
-        {OV7670_REG_GGAIN, 0x80},
+        { OV7670_REG_COM16, OV7670_COM16_AWBGAIN }, { OV7670_REG_EDGE, 0 },
+        { 0x75, 0x05 }, { OV7670_REG_REG76, 0xe1 },
+        { 0x4c, 0 },     { 0x77, 0x01 },
+        { OV7670_REG_COM13, /*0xc3*/0x48 }, { 0x4b, 0x09 },
+        { 0xc9, 0x60 },		/*{OV7670_REG_COM16, 0x38},*/
+        { 0x56, 0x40 },
+
+        { 0x34, 0x11 }, { OV7670_REG_COM11, OV7670_COM11_EXP | OV7670_COM11_HZAUTO },
+        { 0xa4, 0x82/*Was 0x88*/ }, { 0x96, 0 },
+        { 0x97, 0x30 }, { 0x98, 0x20 },
+        { 0x99, 0x30 }, { 0x9a, 0x84 },
+        { 0x9b, 0x29 }, { 0x9c, 0x03 },
+        { 0x9d, 0x4c }, { 0x9e, 0x3f },
+        { 0x78, 0x04 },
+
+        /* Extra-weird stuff.  Some sort of multiplexor register */
+        { 0x79, 0x01 }, { 0xc8, 0xf0 },
+        { 0x79, 0x0f }, { 0xc8, 0x00 },
+        { 0x79, 0x10 }, { 0xc8, 0x7e },
+        { 0x79, 0x0a }, { 0xc8, 0x80 },
+        { 0x79, 0x0b }, { 0xc8, 0x01 },
+        { 0x79, 0x0c }, { 0xc8, 0x0f },
+        { 0x79, 0x0d }, { 0xc8, 0x20 },
+        { 0x79, 0x09 }, { 0xc8, 0x80 },
+        { 0x79, 0x02 }, { 0xc8, 0xc0 },
+        { 0x79, 0x03 }, { 0xc8, 0x40 },
+        { 0x79, 0x05 }, { 0xc8, 0x30 },
+        { 0x79, 0x26 },
+
 
         {OV7670_REG_EDGE, 0x02}, //Edge enhancement factor 
 
-        {OV7670_REG_COM11, 0xFF}, //night mode all options on : automatic
+        //{OV7670_REG_COM11, 0xFF}, //night mode all options on : automatic
+        //{OV7670_REG_COM11, OV7670_COM11_NIGHT | OV7670_COM11_EXP | OV7670_COM11_HZAUTO | (OV7670_COM11_NMFR & 0xFF) | OV7670_COM11_BAND},
+
+        // 3.3 Frame rate adjustment for 13 Mhz input clock
+        // 14.3fps, PCLK = 13Mhz
+        {0x11, 0x01},
+        {0x6b, 0x4a},
+        {0x2a, 0x00},
+        {0x2b, 0x00},
+        {0x92, 0x46},
+        {0x93, 0x00},
+        {0x3b, 0x0a},
+        // 4.2 Night Mode with Auto Frame Rate
+        // 14.3fps ~ 3.6fps night mode for 50Hz light environment
+        {0x3b, 0xca},
+        {0x11, 0x01},
 
 #undef OV7670_SHOW_TEST_PATTERN
 #ifdef OV7670_SHOW_TEST_PATTERN
@@ -190,14 +194,20 @@ static const OV7670_command
         // {OV7670_REG_SCALING_XSC, 0x80}, // Enable pattern
         // {OV7670_REG_SCALING_YSC, 0x80}, // Enable pattern
 #else
-        {OV7670_REG_SCALING_XSC, 0},
-        {OV7670_REG_SCALING_YSC, 0},
+        // {OV7670_REG_SCALING_XSC, 0},
+        // {OV7670_REG_SCALING_YSC, 0},
 #endif
 
-        //{OV7670_REG_CLKRC, 0b10000000}, //double clock
-        //half and then double the pclk. This seems to tidy up the data quality
-        {OV7670_REG_CLKRC, 0x1},
-        {OV7670_REG_DBLV, 0x4A},
+        // Colour balance
+        // {OV7670_REG_GAIN, 0x00},
+        // {OV7670_REG_RED, 0x40},
+        // {OV7670_REG_BLUE, 0x80},
+        // {OV7670_REG_GGAIN, 0xF0},
+        // {OV7670_REG_RBIAS, 0x82},
+        // {OV7670_REG_BBIAS, 0x82},
+        // {OV7670_REG_GbBIAS, 0x82},
+
+        {OV7670_REG_EDGE, 0x02}, //Edge enhancement factor 
 
         {0xFF, 0xFF},       // End-of-data marker
 };
@@ -297,8 +307,8 @@ void ov7670_init(PIO pio, i2c_inst_t *i2c) {
     gpio_set_function(PIN_OV7670_XCLK, GPIO_FUNC_PWM);
     uint pwm_slice = pwm_gpio_to_slice_num(PIN_OV7670_XCLK);
     uint pwm_chan = pwm_gpio_to_channel(PIN_OV7670_XCLK);
-    //const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000);
-    const float div = (float)clock_get_hz(clk_sys) / (12 * 1000 * 1000);
+    //const float div = (float)clock_get_hz(clk_sys) / (24 * 1000 * 1000); //24Mhz 
+    const float div = (float)clock_get_hz(clk_sys) / (13 * 1000 * 1000); //13Mhz as we have datasheet info for that, and 24mhz is too fast for our video drawing code to process
     pwm_set_clkdiv(pwm_slice, div/2);
     // Set period of 2 cycles 
     pwm_set_wrap(pwm_slice, 1);
@@ -320,6 +330,8 @@ void ov7670_init(PIO pio, i2c_inst_t *i2c) {
 
 
     // Initialise camera settings
+    ov7670_write_reg(OV7670_REG_COM7, OV7670_COM7_RESET);
+    sleep_ms(1); //tReset
     const OV7670_command *cmd = OV7670_init;
     while (cmd->reg != 0xFF) {
         ov7670_write_reg(cmd->reg, cmd->value);

@@ -165,15 +165,19 @@ void lcd_draw_row(bool async, uint16_t row, uint16_t* buffer) {
     //restrict output to this row, then stream bytes to fill it
     //the LCD is rotated (240x320) so we actually fill a 320 row high single column
 
+    //stop any existing row
+    dma_channel_abort(lcd_tx_dma_chan);
+
     // column address set
     lcd_write_commandX(ILI9341_CASET, 4, (uint8_t[4]){
         (row >> 8) & 0xFF, row & 0xFF,    // start column
         (row >> 8) & 0xFF, row & 0xFF});  // end column
 
-    // page address set
-    lcd_write_commandX(ILI9341_PASET, 4, (uint8_t[4]){
-        0x00, 0x00,    // start page
-        0x01, 0x3f});  // end page -> 319
+    //const at setup, so skip it for per-row speedup
+    // // page address set
+    // lcd_write_commandX(ILI9341_PASET, 4, (uint8_t[4]){
+    //     0x00, 0x00,    // start page
+    //     0x01, 0x3f});  // end page -> 319
 
     // pixel data (16 bit buffer as 8bit bytes)
     if (async) {
