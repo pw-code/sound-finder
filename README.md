@@ -17,6 +17,9 @@ The camera output framerate is limited (todo: 15FPS?) so that we have time to pr
 
 
 # Building
+
+You must already have the PICO C SDK installed, and it's environment variables set (e.g. PICO_SDK_PATH)
+
 ```
 $ mkdir build
 $ cd build
@@ -29,6 +32,12 @@ $ make
 
 # Loading into the pico
 
+The makefile is configured so you can just do this normally:
+```
+make upload monitor
+```
+
+## manually
 Force into BOOTSEL mode and only flash changed pages
 ```
 picotool load -u sound-finder.bin -f
