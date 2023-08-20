@@ -118,7 +118,6 @@ static void plot_audio_markers(int row) {
 
 // Continuously stream the OV7670 data to the SPI TFT-LCD display
 // We add data overlays as we go.
-// It does not matter that DMA is overwriting data as we go, as video pixels are mostly the same each frame (a bit of tearing may occur)
 void video_stream() {
     while (true) {
         // Grab copy of latest row - then send it
