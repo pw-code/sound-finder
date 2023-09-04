@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "hardware/dma.h"
 
 #include "audio.h"
@@ -23,7 +24,9 @@ _Atomic uint8_t last_capture_buf;
 
 int from_index;
 int to_index;
-uint32_t capture_magnitudes[SAMPLE_OFFSET_COUNT];
+
+magnitude_info_t best_magnitudes[NUM_BEST_MAGNITUDES];
+uint64_t audio_magnitudes[SAMPLE_OFFSET_COUNT];
 
 
 uint handler_dma_channel_0, handler_dma_channel_1;
@@ -108,7 +111,7 @@ static void i2s_dma_setup_sm(PIO pio, uint sm, void *capture_buf0, void *capture
         false                   // Start later, when chained
     );
 
-    // Tell the DMA to raise IRQ line 0 when the channel finishes a block (video.c uses IRQ 1)
+    // Tell the DMA to raise IRQ line 0 when the channel finishes a block (ov7670.c uses IRQ 1 for video)
     if (add_interrupt) {
         dma_channel_set_irq0_enabled(*pChan0, true);
         dma_channel_set_irq0_enabled(*pChan1, true);
@@ -121,7 +124,7 @@ static void i2s_dma_setup_sm(PIO pio, uint sm, void *capture_buf0, void *capture
     }
 
     // Trigger channel 0 now, it will chain to channel 1
-    dma_channel_start(*pChan0);
+    //dma_channel_start(*pChan0); //Now triggered in audio loop so we ensure buffer contents
 }
 
 static void i2s_dma_setup(PIO pio) {
@@ -146,22 +149,32 @@ void audio_dma_init(PIO pio) {
     pio_enable_sm_mask_in_sync(pio, (1u << sm_clocks) | (1u << sm_data0) | (1u << sm_data1) | (1u << sm_data2));
 }
 
+//====================================================================================================
 
-#undef DEBUG_DUMP_AUDIO
-#ifdef DEBUG_DUMP_AUDIO
+
+// Whether to dump audio buffers for debugging
+#undef DEBUG_DUMP_AUDIO_BUFFER
+
+#ifdef DEBUG_DUMP_AUDIO_BUFFER
+
+// Which audio buffer to debug-dump (0..2)
+#define DEBUG_DUMP_AUDIO_BUF capture_buf_data1
+// channel, 0==left, 1==right
+#define DEBUG_DUMP_AUDIO_CHANNEL 0
+
 static void capture_dump(uint buffer_num) {
 
-    // dump capture buffer 0, left channel, as hex
     printf("CAPTURE %d: %d samples\n", capture_count, AUDIO_CHANNEL_BUF_LEN);
     //fflush(stdout);
+
     char buf[128];
     int p = 0;
     for (uint i=0; i<AUDIO_CHANNEL_BUF_LEN; i++) {
         //low byte tells us which channel
-        if ((capture_buf_data0[buffer_num][i] & 1) == 0) {
+        if ((DEBUG_DUMP_AUDIO_BUF[buffer_num][i] & 1) == DEBUG_DUMP_AUDIO_CHANNEL) {
             //output in blocks to improve speed (buffered), plus skip printf as it is slow too.
             //pico is little endian, so we are writing little-endian data 
-            uint8_t * pVal = (uint8_t*)(&capture_buf_data0[buffer_num][i]);
+            uint8_t * pVal = (uint8_t*)(&DEBUG_DUMP_AUDIO_BUF[buffer_num][i]);
 
             buf[p++] = HEX_DIGITS[(pVal[3]>>4) & 0xF];
             buf[p++] = HEX_DIGITS[(pVal[3])    & 0xF];
@@ -187,6 +200,37 @@ static void capture_dump(uint buffer_num) {
     //fflush(stdout);
 }
 #endif
+
+
+// Whether to audio magnitudes for debugging
+#define DEBUG_DUMP_AUDIO_MAGNITUDES
+
+#ifdef DEBUG_DUMP_AUDIO_MAGNITUDES
+
+static void magnitudes_dump() {
+
+    printf("MAGNITUDES\n");
+    printf(" BEST: ");
+    for (uint m=0; m<NUM_BEST_MAGNITUDES; m++) {
+        printf(" %d:%llu", best_magnitudes[m].offset, best_magnitudes[m].magnitude);
+    }
+    printf("\n ALL: ");
+    for (uint s=0; s<SAMPLE_OFFSET_COUNT; s++) {
+        char marker = ' ';
+        for (uint m=0; m<NUM_BEST_MAGNITUDES; m++) {
+            if (best_magnitudes[m].offset == s) {
+                marker = '*';
+                break;
+            }
+        }
+        printf(" %c%llu", marker, audio_magnitudes[s]);
+    }
+    putchar('\n');
+}
+#endif
+
+//====================================================================================================
+
 
 /**
  * @brief adjust the capture buffer pointer, so that it is pointing at a left(0) or right(1) sample
@@ -214,31 +258,63 @@ static void analyse_capture(uint buffer_num) {
 
     const uint num_samples = (to_index - from_index) / 2;
 
-    // For each of the sample offsets, calculate the merged audio's average magnitude and record it for later
-    for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
+    // Analyse stereo sample at each mic position:
+    // * Sum all the audio samples from the various mic offsets 
+    // * They will add together if in sync, and partially cancel each other out otherwise.
+    // * Record the average amplitude of the audio at this mic offset
+    // * Keep the top 3 positions for display later
 
-        // analyse stereo sample at this position
-        uint32_t sum = 0;
+    memset(best_magnitudes, 0, sizeof(best_magnitudes));
+
+    // For each of the sample offsets, calculate the merged audio's average magnitude and record it for later
+    for (uint offset_num = 0; offset_num < SAMPLE_OFFSET_COUNT; ++offset_num) {
+
+        // Analyse stereo sample at this position:
+        // * Sum all the audio at various offsets (they will add if in sync, and partially cancel each other out otherwise)
+        // * Record the average amplitude of the audio at this mic offset
+        // 
+        uint64_t sum = 0;
         for (uint i = from_index; i < to_index; i += 2) {
 
             int32_t sample = 0;
-            for (uint c = 0; c < SAMPLE_OFFSET_NUM_CHANNELS; ++c) {
-                int o = sample_offsets[s][c];
-                sample += buffer[c][i + o];
+            for (uint channel = 0; channel < SAMPLE_OFFSET_NUM_CHANNELS; ++channel) {
+                int o = sample_offsets[offset_num][channel];
+                sample += buffer[channel][i + o];
             }
 
             //sum += (abs(sample) / SAMPLE_OFFSET_NUM_CHANNELS);
             sum += (abs(sample) >> 3); // div 8 is close enough for us, and much faster than an actual divide (by 6 channels)
         }
 
-        capture_magnitudes[s] = sum / num_samples;
+        uint64_t capture_magnitude = sum / num_samples;
+        audio_magnitudes[offset_num] = capture_magnitude;
+
+        // insert into best_magnitudes, keeping the best at the top
+        for (uint m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
+            if (capture_magnitude > best_magnitudes[m].magnitude) {
+                // insert here
+
+                // make room
+                for (uint x = NUM_BEST_MAGNITUDES - 1; x > m; x--) {
+                    best_magnitudes[x] = best_magnitudes[x - 1];
+                }
+
+                // insert
+                best_magnitudes[m].magnitude = capture_magnitude;
+                best_magnitudes[m].offset = offset_num;
+
+                break;
+            }
+        }
     }
 
-    //printf("CAPTURE %d at %d\n", capture_count, buffer_num);
-#ifdef DEBUG_DUMP_AUDIO
-    capture_dump(last_capture_buf);
+#ifdef DEBUG_DUMP_AUDIO_BUFFER
+    capture_dump(buffer_num);
 #endif
 
+#ifdef DEBUG_DUMP_AUDIO_MAGNITUDES
+    magnitudes_dump();
+#endif
 }
 
 
@@ -266,17 +342,21 @@ void audio_capture_analyse() {
         }
     }
 
+    // start capture cycle
+    dma_start_channel_mask((1u << dma_chan0_0) | (1u << dma_chan1_0) | (1u << dma_chan2_0));
+
     // main audio loop, capture and analyse audio samples
     while(true) {
         // wait for alternate DMA buffers to fill, and then process each whilst triggering the next
 
         dma_channel_wait_for_finish_blocking(dma_chan0_0);
-        dma_channel_start(dma_chan0_1); //trigger the other, while we analyse this
+        dma_start_channel_mask((1u << dma_chan0_1) | (1u << dma_chan1_1) | (1u << dma_chan2_1)); //trigger the other, while we analyse this
         gpio_put(PIN_LED, 0);
         analyse_capture(0);
 
+
         dma_channel_wait_for_finish_blocking(dma_chan0_1);
-        dma_channel_start(dma_chan0_0); //trigger the other, while we analyse this
+        dma_start_channel_mask((1u << dma_chan0_0) | (1u << dma_chan1_0) | (1u << dma_chan2_0)); //trigger the other, while we analyse this
         gpio_put(PIN_LED, 1);
         analyse_capture(1);
     }

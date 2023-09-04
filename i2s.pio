@@ -158,7 +158,7 @@ static inline void i2s_program_load(PIO pio, uint sample_rate_hz, uint pin_clk, 
     pio_sm_clear_fifos(pio, sm_clocks);
 
     // set all enabled
-    //started in main() after DMA setup 
+    //started in audio_dma_init() after DMA setup 
     //pio_enable_sm_mask_in_sync(pio, 0x0f); //all 4 at once!!
 }
 

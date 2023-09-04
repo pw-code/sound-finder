@@ -12,7 +12,14 @@
 #define AUDIO_NUM_CHANNELS        2     /* stereo from i2s */
 #define AUDIO_CHANNEL_BUF_LEN     (AUDIO_SAMPLE_RATE_HZ * AUDIO_NUM_CHANNELS * AUDIO_SAMPLE_MILLISECONDS) / 1000
 
-extern uint32_t capture_magnitudes[SAMPLE_OFFSET_COUNT];
+#define NUM_BEST_MAGNITUDES  3
+
+typedef struct magnitude_info {
+    uint offset;
+    uint64_t magnitude;
+} magnitude_info_t;
+extern magnitude_info_t best_magnitudes[NUM_BEST_MAGNITUDES];
+extern uint64_t audio_magnitudes[SAMPLE_OFFSET_COUNT];
 
 extern void audio_dma_init();
 extern void audio_capture_analyse();

@@ -86,33 +86,41 @@ void video_init(PIO pio) {
 }
 
 
-static void plot_audio_marker(int row, int marker_x, int marker_y, uint32_t magnitude) {
+static void plot_audio_marker(int row, int marker_x, int marker_y, uint16_t magnitude) {
 
     // Draw a square around the given spot
-    // Redness will be based on magnitude (top 3 bits??)
-    const uint16_t r = 0x80 | (magnitude >> 24);
+    // Redness will be based on magnitude (3 bits)
+    const uint16_t r = (magnitude & 0x3) << 6;
 
     if (row >= (marker_y - SQUARE_SIZE) && row < (marker_y + SQUARE_SIZE)) {
         int minx = marker_x - SQUARE_SIZE;
         if (minx < 0) { minx = 0; }
         int maxx = marker_x + SQUARE_SIZE;
         if (maxx > VIDEO_COLUMNS) { maxx = VIDEO_COLUMNS; }
+
         for (int x = minx; x < maxx; ++x) {
-            //replace RED (endianness means it's in an odd place in the buffer)
-            // rrrrrggggggbbbbb =>  gggbbbbbrrrrrggg
-            //                    0b1110011100000001 
-            //also remove the top 2 bits of G & B too (fade away)
-            video_buffer_lcd[x] = (video_buffer_lcd[x] & 0b1110011100000001) | (r & 0b0000000011111000);
+            // Reduce all colour saturations by 2 bits (righted right 2 bits). 
+            // Then use magnitude to replace the top bits of red
+            //
+            // Note that endianness means it's in an odd place in the buffer.
+            // rrrrrggggggbbbbb =>  gggbbbbb rrrrrggg
+            //  mask             0b 11100111 00111001 
+            #define ROR(x,y) ((uint32_t)(x) >> (y) | (uint32_t)(x) << 32 - (y))
+            video_buffer_lcd[x] = (ROR(video_buffer_lcd[x], 1) & 0b1110011100111001) | (r & 0b0000000011000000);
         }
     }
 }
 
 static void plot_audio_markers(int row) {
-    for (uint s = 0; s < SAMPLE_OFFSET_COUNT; ++s) {
-        int x = screen_offsets[s].x;
-        int y = screen_offsets[s].y;
-        uint32_t magnitude = capture_magnitudes[s];
-        plot_audio_marker(row, x, y, magnitude);
+    for (uint16_t m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
+
+        uint o = best_magnitudes[m].offset;
+        int x = screen_offsets[o].x;
+        int y = screen_offsets[o].y;
+
+        uint16_t draw_magnitude = NUM_BEST_MAGNITUDES - m;  // [0] is highest intensity
+
+        plot_audio_marker(row, x, y, draw_magnitude);
     }
 }
 
