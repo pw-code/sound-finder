@@ -153,7 +153,7 @@ void audio_dma_init(PIO pio) {
 
 
 // Whether to dump audio buffers for debugging
-#undef DEBUG_DUMP_AUDIO_BUFFER
+#define DEBUG_DUMP_AUDIO_BUFFER
 
 #ifdef DEBUG_DUMP_AUDIO_BUFFER
 
@@ -173,9 +173,11 @@ static void capture_dump(uint buffer_num) {
         //low byte tells us which channel
         if ((DEBUG_DUMP_AUDIO_BUF[buffer_num][i] & 1) == DEBUG_DUMP_AUDIO_CHANNEL) {
             //output in blocks to improve speed (buffered), plus skip printf as it is slow too.
-            //pico is little endian, so we are writing little-endian data 
             uint8_t * pVal = (uint8_t*)(&DEBUG_DUMP_AUDIO_BUF[buffer_num][i]);
 
+            // big-endian 32bit pcm encoding
+            // example decoding: xxd -p -r <minicom.cap >audio.au
+            // load in audacity as import raw data: signed 32bit pcm, big-endian, 1 channel, 44100hz
             buf[p++] = HEX_DIGITS[(pVal[3]>>4) & 0xF];
             buf[p++] = HEX_DIGITS[(pVal[3])    & 0xF];
             buf[p++] = HEX_DIGITS[(pVal[2]>>4) & 0xF];
@@ -247,14 +249,15 @@ static inline uint32_t * adjust_left_right(int32_t wanted, int32_t * buffer) {
 static void analyse_capture(uint buffer_num) {
 //!!!!!
 // TODO: ensure that these left/right channels, for each of the 3 I2S strings, actually matches the mic offsets in offsets.h
+// mics are arrange (viewed from the back of the device), starting center right, and moving anticlockwise
 //!!!!!
     uint32_t * buffer[SAMPLE_OFFSET_NUM_CHANNELS] = {
+        adjust_left_right(0, &capture_buf_data1[buffer_num][0]),
         adjust_left_right(0, &capture_buf_data0[buffer_num][0]),
         adjust_left_right(1, &capture_buf_data0[buffer_num][1]),
-        adjust_left_right(0, &capture_buf_data1[buffer_num][0]),
-        adjust_left_right(1, &capture_buf_data1[buffer_num][1]),
         adjust_left_right(0, &capture_buf_data2[buffer_num][0]),
-        adjust_left_right(1, &capture_buf_data2[buffer_num][1]) };
+        adjust_left_right(1, &capture_buf_data2[buffer_num][1]),
+        adjust_left_right(1, &capture_buf_data1[buffer_num][1]) };
 
     const uint num_samples = (to_index - from_index) / 2;
 
