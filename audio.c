@@ -153,7 +153,7 @@ void audio_dma_init(PIO pio) {
 
 
 // Whether to dump audio buffers for debugging
-#define DEBUG_DUMP_AUDIO_BUFFER
+#undef DEBUG_DUMP_AUDIO_BUFFER
 
 #ifdef DEBUG_DUMP_AUDIO_BUFFER
 
@@ -171,7 +171,7 @@ static void capture_dump(uint buffer_num) {
     int p = 0;
     for (uint i=0; i<AUDIO_CHANNEL_BUF_LEN; i++) {
         //low byte tells us which channel
-        if ((DEBUG_DUMP_AUDIO_BUF[buffer_num][i] & 1) == DEBUG_DUMP_AUDIO_CHANNEL) {
+        {//if ((DEBUG_DUMP_AUDIO_BUF[buffer_num][i] & 1) == DEBUG_DUMP_AUDIO_CHANNEL) {
             //output in blocks to improve speed (buffered), plus skip printf as it is slow too.
             uint8_t * pVal = (uint8_t*)(&DEBUG_DUMP_AUDIO_BUF[buffer_num][i]);
 
@@ -205,7 +205,7 @@ static void capture_dump(uint buffer_num) {
 
 
 // Whether to audio magnitudes for debugging
-#define DEBUG_DUMP_AUDIO_MAGNITUDES
+#undef DEBUG_DUMP_AUDIO_MAGNITUDES
 
 #ifdef DEBUG_DUMP_AUDIO_MAGNITUDES
 
@@ -282,7 +282,7 @@ static void analyse_capture(uint buffer_num) {
             int32_t sample = 0;
             for (uint channel = 0; channel < SAMPLE_OFFSET_NUM_CHANNELS; ++channel) {
                 int o = sample_offsets[offset_num][channel];
-                sample += buffer[channel][i + o];
+                sample += buffer[channel][i - (o * 2)];
             }
 
             //sum += (abs(sample) / SAMPLE_OFFSET_NUM_CHANNELS);
@@ -293,7 +293,8 @@ static void analyse_capture(uint buffer_num) {
         audio_magnitudes[offset_num] = capture_magnitude;
 
         // insert into best_magnitudes, keeping the best at the top
-        for (uint m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
+        uint m;
+        for (m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
             if (capture_magnitude > best_magnitudes[m].magnitude) {
                 // insert here
 
@@ -304,10 +305,15 @@ static void analyse_capture(uint buffer_num) {
 
                 // insert
                 best_magnitudes[m].magnitude = capture_magnitude;
-                best_magnitudes[m].offset = offset_num;
+                best_magnitudes[m].offset_num = offset_num;
 
                 break;
             }
+        }
+        // it goes last?
+        if (m >= NUM_BEST_MAGNITUDES) {
+            best_magnitudes[NUM_BEST_MAGNITUDES - 1].magnitude = capture_magnitude;
+            best_magnitudes[NUM_BEST_MAGNITUDES - 1].offset_num = offset_num;
         }
     }
 

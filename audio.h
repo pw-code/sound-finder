@@ -15,7 +15,7 @@
 #define NUM_BEST_MAGNITUDES  3
 
 typedef struct magnitude_info {
-    uint offset;
+    uint offset_num;
     uint64_t magnitude;
 } magnitude_info_t;
 extern magnitude_info_t best_magnitudes[NUM_BEST_MAGNITUDES];

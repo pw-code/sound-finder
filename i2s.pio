@@ -12,8 +12,10 @@
 ; -----------------
 .program i2s_clocks
 .side_set 1
+    // pins=WS, side=CLK
 
 .wrap_target
+    // 2 clock cycles per bit, plus 1 before and 1 after each word.
 
     //WS = 0
 left_word:
@@ -22,7 +24,7 @@ left_bits:
     set pins, 0         side 1       ;WS=0, CLK=1
     jmp x-- left_bits   side 0       ;CLK=0, jmp
 
-    set pins, 1         side 0       ;prepare for next word.
+    set pins, 1         side 0       ;prepare for next word. Changing WS on clock low.
 
     //WS = 1
 right_word:
@@ -31,7 +33,7 @@ right_bits:
     set pins, 1         side 1       ;WS=1, CLK=1
     jmp x-- right_bits  side 0       ;CLK=0, jmp
 
-    set pins, 0         side 0       ;prepare for next word.
+    set pins, 0         side 0       ;prepare for next word. Changing WS on clock low.
 
 .wrap
 
@@ -40,24 +42,30 @@ right_bits:
 ; -----------------
 .program i2s_data
 .side_set 1 opt
-
-    set y, 0                   [1]   ;WS substitute - to match ws state in i2s clocks prog - plus 1 cycle delay
-                                     ;No matching instruction in clock prog.
-                                     ;Because we want to sample on second clock (1 clock cycle behind is2 clocks, see INMP441 datasheet)
+    // pins=DATA, side=debug
 
 .wrap_target
+    // 2 clock cycles per bit, plus 1 before and 1 after each word.
+    // valid data appears 1 bit delayed
 
-    set x, 30                        ;32 bits per word, but last handled differently
+    //pre-word clock cycle
+    set x, 29                        ;32 bits per word, but first & last handled differently
+
+    //first bit, ignored but clocked
+    set x, 29           side 1 
+    set x, 29           side 0
+
+    //remaining 29 + 1 bits
 read_bits:
     in  pins, 1         side 1       ;side pins used for debugging only (high when we sample - to check in sync with clock)
     jmp x-- read_bits   side 0
 
-    ; bit 32 (in 2 instructions to match loop size)
-    in y, 1             side 1       ;last bit is now WS indicator
+    ; bit 32 (plus 1 more to count for missing first bit)
+    in y, 2             side 1       ;last 2 bits is now WS indicator
     push noblock        side 0       ;non blocking (we must not get out of sync with clocks).
 
-    ; prepare for next work
-    mov y, !y               ; flip Y (toggle channel)
+    ; Extra clock after each word.
+    mov y, !y                        ;flip Y (toggle channel) 
 
 .wrap
 
