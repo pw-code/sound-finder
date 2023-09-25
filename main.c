@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/multicore.h"
@@ -9,6 +10,15 @@
 #include "pins.h"
 #include "video.h"
 
+
+//https://forums.raspberrypi.com/viewtopic.php?t=329406&start=25
+extern char __HeapLimit, __StackLimit;
+static long ram_free() {
+    char *p = malloc(256);   // try to avoid undue fragmentation
+    int left = &__StackLimit - p;
+    free(p);
+    return left;
+}
 
 
 int main() {
@@ -71,5 +81,6 @@ int main() {
     // core 0 handles all the interrupts and video work
     // core 1 handles audio analysis
     multicore_launch_core1(audio_capture_analyse); //core 1
+    printf("RAM free %ld\n", ram_free());
     video_stream(); //core 0
 }

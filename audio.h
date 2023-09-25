@@ -4,7 +4,7 @@
 
 #include "offsets.h"
 
-#define AUDIO_SAMPLE_RATE_HZ 44100
+#define AUDIO_SAMPLE_RATE_HZ 48000
 #define AUDIO_NUM_BUFFERS    2   /*double-buffered DMA*/
 
 // Audio buffers. These must fit in ram (only 260kb total)

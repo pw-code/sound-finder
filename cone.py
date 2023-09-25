@@ -38,15 +38,15 @@ def make_points(num_points, points, distance, fov, ratio):
 
 def generate_cone_points(num_points, closest_distance, far_distance, distance_step, fov, ratio):
     points = []
-    points_per_layer = num_points / (far_distance - closest_distance) * distance_step
+    points_per_layer = num_points / (far_distance - closest_distance + distance_step) * distance_step
     for d in range(closest_distance, far_distance + 1, distance_step):
         make_points(points_per_layer, points, d, fov, ratio)
     return points
 
 ratio = 4/3 # 4:3 resolution ratio
-fov = 50    # field of view of camera
-num_points = 100
-cone_points = generate_cone_points(num_points/2, 2, 15, 2, fov, ratio)
+fov = 30    # field of view of camera (from offset_calc.py)
+num_points = 64 # enough for detail without being too too slow to sample
+cone_points = generate_cone_points(num_points, 2, 15, 3, fov, ratio)
 
 # Visualization
 fig = plt.figure()
