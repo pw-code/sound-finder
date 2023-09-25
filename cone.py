@@ -1,4 +1,5 @@
 import math
+import pprint
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,10 +14,10 @@ def calculate_rectangle(d, fov_degrees, ratio):
     h = w * ratio
     return (w,h)
 
-def frange(x, y, step):
-    while x < y:
-        yield x
-        x += step
+def frange(a, b, step):
+    while a < b:
+        yield a
+        a += step
 
 def make_points(num_points, points, distance, fov, ratio):
     # rectangle at that distance is a specific size, that we need to cover with points
@@ -44,9 +45,9 @@ def generate_cone_points(num_points, closest_distance, far_distance, distance_st
     return points
 
 ratio = 4/3 # 4:3 resolution ratio
-fov = 30    # field of view of camera (from offset_calc.py)
-num_points = 64 # enough for detail without being too too slow to sample
-cone_points = generate_cone_points(num_points, 2, 15, 3, fov, ratio)
+fov = 25    # field of view of camera (from offset_calc.py)
+num_points = 75 # enough for detail without being too too slow to sample
+cone_points = generate_cone_points(num_points, 1, 12, 5, fov, ratio)
 
 # Visualization
 fig = plt.figure()
@@ -64,5 +65,5 @@ print("# Sound points to analyse (x,y,z)")
 print("# Place this in offset_calc.py")
 print("# " + str(len(cone_points)) + " points calculated from cone.py")
 print("sound_points=", end="")
-print(cone_points)
+pprint.pprint(cone_points)
 
