@@ -112,17 +112,26 @@ static void plot_audio_marker(int row, int marker_x, int marker_y, uint16_t magn
 }
 
 static void plot_audio_markers(int row) {
-    //for (uint16_t m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
-    uint m = 0;
-        uint o = best_magnitudes[m].offset_num;
-        int x = screen_offsets[o].x;
-        int y = screen_offsets[o].y;
+    // draw each, strongest is stronger color
+    // for (uint16_t m = 0; m < NUM_BEST_MAGNITUDES; ++m) {
+    //     uint o = best_magnitudes[m].offset_num;
+    //     int x = screen_offsets[o].x;
+    //     int y = screen_offsets[o].y;
 
-        //uint16_t draw_magnitude = NUM_BEST_MAGNITUDES - m;  // [0] is highest intensity
-        uint16_t draw_magnitude = m == 0 ? 3 : 1;
+    //     //uint16_t draw_magnitude = NUM_BEST_MAGNITUDES - m;  // [0] is highest intensity
+    //     uint16_t draw_magnitude = m == 0 ? 3 : 1;
 
-        plot_audio_marker(row, x, y, draw_magnitude);
-    //}
+    //     plot_audio_marker(row, x, y, draw_magnitude);
+    // }
+
+    // draw best location only
+    // uint o = best_magnitudes[0].offset_num;
+    // int x = screen_offsets[o].x;
+    // int y = screen_offsets[o].y;
+    // plot_audio_marker(row, x, y, 3);
+
+    // draw averaged location only (last sample)
+    plot_audio_marker(row, averaged_best_x, averaged_best_y, 3);
 }
 
 // Continuously stream the OV7670 data to the SPI TFT-LCD display

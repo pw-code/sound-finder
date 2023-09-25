@@ -21,5 +21,8 @@ typedef struct magnitude_info {
 extern magnitude_info_t best_magnitudes[NUM_BEST_MAGNITUDES];
 extern uint64_t audio_magnitudes[SAMPLE_OFFSET_COUNT];
 
+extern float averaged_best_x;
+extern float averaged_best_y;
+
 extern void audio_dma_init();
 extern void audio_capture_analyse();

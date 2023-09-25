@@ -28,6 +28,10 @@ int to_index;
 magnitude_info_t best_magnitudes[NUM_BEST_MAGNITUDES];
 uint64_t audio_magnitudes[SAMPLE_OFFSET_COUNT];
 
+const int averaged_over_n_samples = 3;
+float averaged_best_x = 160; //middle of screen
+float averaged_best_y = 120;
+
 
 uint handler_dma_channel_0, handler_dma_channel_1;
 uint dma_chan0_0, dma_chan0_1;
@@ -286,7 +290,8 @@ static void analyse_capture(uint buffer_num) {
             }
 
             //sum += (abs(sample) / SAMPLE_OFFSET_NUM_CHANNELS);
-            sum += (abs(sample) >> 3); // div 8 is close enough for us, and much faster than an actual divide (by 6 channels)
+            //sum += (abs(sample) >> 3); // div 8 is close enough for us, and much faster than an actual divide (by 6 channels)
+            sum += abs(sample); //no divide - we are loosing too much volume for quieter sounds?
         }
 
         uint64_t capture_magnitude = sum / num_samples;
@@ -316,6 +321,14 @@ static void analyse_capture(uint buffer_num) {
             best_magnitudes[NUM_BEST_MAGNITUDES - 1].offset_num = offset_num;
         }
     }
+
+    // make a moving average of the best over time
+    uint o = best_magnitudes[0].offset_num;
+    int x = screen_offsets[o].x;
+    int y = screen_offsets[o].y;
+    averaged_best_x = ((averaged_best_x * (averaged_over_n_samples-1)) + x) / averaged_over_n_samples;
+    averaged_best_y = ((averaged_best_y * (averaged_over_n_samples-1)) + y) / averaged_over_n_samples;
+
 
 #ifdef DEBUG_DUMP_AUDIO_BUFFER
     capture_dump(buffer_num);
